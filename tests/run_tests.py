@@ -19,7 +19,7 @@ class Stack:
             time.sleep(.05)
         s.log = open(s.d + '/ctl.log', 'w')
         s.ctl = subprocess.Popen([BIN, '--cat-port', s.link, '--web-port', str(WEB), '--rig-port', str(RIG),
-                                  '--config-dir', s.d + '/cfg', *ctl], stdout=s.log, stderr=s.log)
+                                  '--config-dir', s.d + '/cfg', *(ctl if '--lang' in ctl else ('--lang', 'hu', *ctl))], stdout=s.log, stderr=s.log)
         if nowait: time.sleep(1); return
         wait(lambda: state(s)['connected'] and state(s)['menu_n_done'], 8, 'kapcsolódás')
     def rig(s): return ast.literal_eval(open(s.stf).read())
@@ -659,6 +659,24 @@ def t_sigterm_keyed():
         k.close()
     finally:
         s.close()
+
+@test
+def t_language():
+    """Angol felület: üzenetek, lap, menüleírás, nyelvváltás WebSocketen"""
+    with Stack(ctl=('--lang', 'en')) as s:
+        assert json.loads(http_req('GET', '/api/whoami')[1])['lang'] == 'en'
+        page = http_req('GET', '/')[1].decode()
+        assert '<html lang="en">' in page[:200], page[:120]
+        d = {x['id']: x for x in api('/api/menus')[1]['defs']}['0205']
+        assert d['desc'] == 'Meter peak hold' and d['grp'] == 'Display' and d['labels'].startswith('Off|'), d
+        assert state()['lang'] == 'en'
+        w = WS(); w.send('lang 0')
+        wait(lambda: state()['lang'] == 'hu', 3, 'nyelvváltás')
+        w.close()
+        assert '<html lang="hu">' in http_req('GET', '/')[1].decode()[:200]
+        d = {x['id']: x for x in api('/api/menus')[1]['defs']}['0205']
+        assert d['desc'] == 'A mérő csúcsértékének megtartása', d
+        assert 'lang=hu' in open(s.d + '/cfg/config').read()
 
 bad = [r for r in results if not r[1]]
 print(f'\n{len(results)-len(bad)}/{len(results)} teszt sikeres')

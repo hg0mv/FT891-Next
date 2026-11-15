@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define APP_VERSION "0.5"
+#define APP_VERSION "0.6"
 #define RX_CHUNK 640    /* 80 ms hang: 8 kHz, mu-law */
 #define WF_BINS 512
 #define MENU_MAX 16
@@ -31,9 +31,13 @@ typedef struct {
     char audio_dev[128];
     char arecord[200];
     char aplay[200];
+    _Atomic int lang_en;  /* 1: angol felület és üzenetek */
     int  tls_port;
 } config_t;
 extern config_t g_cfg;
+/* Kétnyelvű szöveg: a két változat formátuma azonos kell legyen */
+#define TR(hu, en) (g_cfg.lang_en ? (en) : (hu))
+void set_lang(int en);
 extern _Atomic int g_stop;
 void config_load(void);
 void config_save(void);

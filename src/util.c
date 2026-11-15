@@ -145,6 +145,7 @@ void config_load(void) {
             else if (!strcmp(line, "mode_lock")) g_cfg.mode_lock = atoi(v);
             else if (!strcmp(line, "tx_max_s")) g_cfg.tx_max_s = atoi(v);
             else if (!strcmp(line, "last_baud")) g_cfg.last_baud = atoi(v);
+            else if (!strcmp(line, "lang")) g_cfg.lang_en = strcmp(v, "hu") != 0;
             else if (!strcmp(line, "audio_dev")) snprintf(g_cfg.audio_dev, sizeof g_cfg.audio_dev, "%s", v);
         }
         fclose(f);
@@ -154,7 +155,7 @@ void config_load(void) {
 
 void config_new_pin(void) {
     uint32_t r = 0;
-    if (random_bytes(&r, sizeof r)) { fprintf(stderr, "Nem olvasható /dev/urandom\n"); exit(1); }
+    if (random_bytes(&r, sizeof r)) { fprintf(stderr, "%s", TR("Nem olvasható /dev/urandom\n", "Cannot read /dev/urandom\n")); exit(1); }
     snprintf(g_cfg.pin, sizeof g_cfg.pin, "%06u", r % 1000000u);
     config_save();
 }
@@ -164,10 +165,10 @@ void config_save(void) {
     snprintf(path, sizeof path, "%s/config", g_cfg.cfg_dir);
     snprintf(tmp, sizeof tmp, "%s.new", path);
     int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) { log_msg("A beállítások nem menthetők: %s", strerror(errno)); return; }
+    if (fd < 0) { log_msg(TR("A beállítások nem menthetők: %s", "Cannot save settings: %s"), strerror(errno)); return; }
     FILE *f = fdopen(fd, "w");
-    fprintf(f, "pin=%s\nptt_method=%d\nmode_lock=%d\ntx_max_s=%d\nlast_baud=%d\naudio_dev=%s\n",
-            g_cfg.pin, g_cfg.ptt_method, g_cfg.mode_lock, g_cfg.tx_max_s, g_cfg.last_baud, g_cfg.audio_dev);
+    fprintf(f, "pin=%s\nlang=%s\nptt_method=%d\nmode_lock=%d\ntx_max_s=%d\nlast_baud=%d\naudio_dev=%s\n",
+            g_cfg.pin, g_cfg.lang_en ? "en" : "hu", g_cfg.ptt_method, g_cfg.mode_lock, g_cfg.tx_max_s, g_cfg.last_baud, g_cfg.audio_dev);
     fclose(f);
     rename(tmp, path);
 }

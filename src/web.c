@@ -169,7 +169,7 @@ static void do_login(const conn_t *c, const req_t *r) {
             lock_until = t + (30000LL << (k > 6 ? 6 : k));
         }
         pthread_mutex_unlock(&A);
-        log_msg("Hibás PIN-kód érkezett");
+        log_msg(TR("Hibás PIN-kód érkezett", "Wrong PIN received"));
         reply(c->fd, "403 Forbidden", "application/json", NULL, "{\"ok\":false}", 12);
         return;
     }
@@ -223,7 +223,7 @@ static int state_json(char *o, size_t cap) {
     I("ifs_on", s.ft[FT_IFS_ON]); I("ifs", s.ft[FT_IFS]); I("notch_on", s.ft[FT_NOTCH_ON]); I("notch_hz", s.ft[FT_NOTCH]);
     I("cont_on", s.ft[FT_CONT_ON]); I("cont", s.ft[FT_CONT]); I("apf_on", s.ft[FT_APF_ON]); I("apf", s.ft[FT_APF]);
     { char wf[160]; audio_status(wf, sizeof wf); T("wf_status", wf); }
-    I("tls_port", g_cfg.tls_port); I("agc", s.agc); I("width_idx", s.width_idx); I("narrow", s.narrow); I("width_hz", rig_width_hz(&s));
+    T("lang", g_cfg.lang_en ? "en" : "hu"); I("tls_port", g_cfg.tls_port); I("agc", s.agc); I("width_idx", s.width_idx); I("narrow", s.narrow); I("width_hz", rig_width_hz(&s));
     { int pm, ml, tm; char dev[128];
       rig_cfg_get(&pm, &ml, &tm, dev, sizeof dev);
       I("ptt_method", pm); I("mode_lock", ml); I("tx_max", tm); T("wf_dev", dev); }
@@ -280,11 +280,12 @@ static void ws_cmd(char *line, int slot, int *wf, int *rx) {
     else if (!strcmp(v, "sstv") && k >= 2) sstv_cmd("on", (int)a);
     else if (!strcmp(v, "sstvgo") && k >= 2) sstv_cmd("go", (int)a);
     else if (!strcmp(v, "sstvstop")) sstv_cmd("stop", 0);
+    else if (!strcmp(v, "lang") && k >= 2) set_lang(a != 0);
     else if (!strcmp(v, "power") && k >= 2) rig_post(OP_POWER, a != 0, 0);
     else if (!strcmp(v, "wfdev")) {
         char *d = line + 6;
         d[strcspn(d, "\r\n")] = 0;
-        if (audio_set_dev(d)) rig_notice(1, "Nincs ilyen hangeszköz.");
+        if (audio_set_dev(d)) rig_notice(1, TR("Nincs ilyen hangeszköz.", "No such sound device."));
     }
     else if (!strcmp(v, "filt") && k >= 3) rig_post(OP_FILT, a, b);
     else if (!strcmp(v, "ptt")) rig_hold(SRC_WEB(slot), a != 0, a ? 1200 : 0);
@@ -410,7 +411,7 @@ static void ws_accept(conn_t *c, const req_t *r) {
     pthread_mutex_lock(&A);
     for (int i = 0; i < MAX_WEB; i++) if (!web_used[i]) { web_used[i] = 1; slot = i; break; }
     pthread_mutex_unlock(&A);
-    if (slot < 0) { reply_txt(c->fd, "503 Busy", "Túl sok megnyitott felület"); return; }
+    if (slot < 0) { reply_txt(c->fd, "503 Busy", TR("Túl sok megnyitott felület", "Too many open interfaces")); return; }
     int n = snprintf(src, sizeof src, "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", r->ws_key);
     sha1((uint8_t *)src, (size_t)n, dig);
     base64(dig, 20, acc);
@@ -464,7 +465,7 @@ static int data_api(conn_t *c, req_t *r, const char *path) {
                 !strcmp(a, "write") || !strcmp(a, "apply") || !strcmp(a, "profile") || !strcmp(a, "profile-del") ||
                 !strcmp(a, "mem-write") || !strcmp(a, "audio") || !strcmp(a, "rig") || !strcmp(a, "sstv") || !strcmp(a, "sstv-img");
     if (!known) return 0;
-    if (!authed(c, r)) { reply_txt(c->fd, "401 Unauthorized", "PIN szükséges"); return 1; }
+    if (!authed(c, r)) { reply_txt(c->fd, "401 Unauthorized", TR("PIN szükséges", "PIN required")); return 1; }
     if (!origin_ok(r)) { reply_txt(c->fd, "403 Forbidden", "Idegen eredet"); return 1; }
     url_arg(r->path, "name", name, sizeof name);
     if (!post) {
@@ -478,7 +479,7 @@ static int data_api(conn_t *c, req_t *r, const char *path) {
         else if (!strcmp(a, "sstv-img")) {
             size_t len = 0;
             char *d = sstv_read(name, &len);
-            if (!d) reply_txt(c->fd, "404 Not Found", "Nincs ilyen kép");
+            if (!d) reply_txt(c->fd, "404 Not Found", TR("Nincs ilyen kép", "No such picture"));
             else {
                 reply(c->fd, "200 OK", "image/png", NULL, d, len);
                 free(d);
@@ -496,19 +497,19 @@ static int data_api(conn_t *c, req_t *r, const char *path) {
         return 1;
     }
     if (!strcmp(a, "write")) {
-        int q = menu_queue(r->body, "Menüírás");
-        reply_ok(c->fd, !q, q ? "Már fut egy művelet." : "");
+        int q = menu_queue(r->body, TR("Menüírás", "Menu write"));
+        reply_ok(c->fd, !q, q ? TR("Már fut egy művelet.", "Another operation is running.") : "");
     } else if (!strcmp(a, "apply")) {
         char type[16];
         url_arg(r->path, "type", type, sizeof type);
         int q = menu_queue_set(!strcmp(type, "backup"), name);
-        reply_ok(c->fd, !q, q == -2 ? "Nincs ilyen profil." : q ? "Már fut egy művelet." : "");
+        reply_ok(c->fd, !q, q == -2 ? TR("Nincs ilyen profil.", "No such profile.") : q ? TR("Már fut egy művelet.", "Another operation is running.") : "");
     } else if (!strcmp(a, "profile")) {
         int q = profile_save(name, r->body);
-        reply_ok(c->fd, !q, q ? "Ezzel a névvel nem menthető." : "");
+        reply_ok(c->fd, !q, q ? TR("Ezzel a névvel nem menthető.", "Cannot save with this name.") : "");
     } else if (!strcmp(a, "profile-del")) {
         int q = profile_delete(name);
-        reply_ok(c->fd, !q, q ? "Nincs ilyen profil." : "");
+        reply_ok(c->fd, !q, q ? TR("Nincs ilyen profil.", "No such profile.") : "");
     } else if (!strcmp(a, "mem-write")) {
         int q = mem_queue(r->body, err, sizeof err);
         reply_ok(c->fd, !q, err);
@@ -591,11 +592,22 @@ static void *conn_main(void *p) {
         char path[200];
         snprintf(path, sizeof path, "%s", r->path);
         path[strcspn(path, "?")] = 0;
-        if (!strcmp(path, "/") && !strcmp(r->method, "GET"))
-            reply(c.fd, "200 OK", "text/html; charset=utf-8", NULL, page_start, (size_t)(page_end - page_start));
+        if (!strcmp(path, "/") && !strcmp(r->method, "GET")) {
+            /* a lap nyelvét a <html lang="hu"> attribútum adja meg */
+            size_t n = (size_t)(page_end - page_start);
+            char *pg = malloc(n);
+            if (pg) {
+                memcpy(pg, page_start, n);
+                char *l = memmem(pg, n < 200 ? n : 200, "lang=\"hu\"", 9);
+                if (l && g_cfg.lang_en) memcpy(l + 6, "en", 2);
+                reply(c.fd, "200 OK", "text/html; charset=utf-8", NULL, pg, n);
+                free(pg);
+            } else
+                reply_txt(c.fd, "500 Internal Server Error", "out of memory");
+        }
         else if (!strcmp(path, "/api/whoami")) {
             char b[64];
-            int l = snprintf(b, sizeof b, "{\"auth\":%s}", authed(&c, r) ? "true" : "false");
+            int l = snprintf(b, sizeof b, "{\"auth\":%s,\"lang\":\"%s\"}", authed(&c, r) ? "true" : "false", g_cfg.lang_en ? "en" : "hu");
             reply(c.fd, "200 OK", "application/json", NULL, b, (size_t)l);
         }
         else if (!strcmp(path, "/api/login") && !strcmp(r->method, "POST")) {
@@ -603,7 +615,7 @@ static void *conn_main(void *p) {
             else do_login(&c, r);
         }
         else if (!strcmp(path, "/api/state")) {
-            if (!authed(&c, r)) reply_txt(c.fd, "401 Unauthorized", "PIN szükséges");
+            if (!authed(&c, r)) reply_txt(c.fd, "401 Unauthorized", TR("PIN szükséges", "PIN required"));
             else {
                 static __thread char o[7500];
                 int l = state_json(o, sizeof o);
@@ -614,10 +626,10 @@ static void *conn_main(void *p) {
         else if (!strcmp(path, "/ws")) {
             if (strcasecmp(r->upgrade, "websocket") || !r->ws_key[0]) reply_txt(c.fd, "400 Bad Request", "WebSocket kell");
             else if (!origin_ok(r)) reply_txt(c.fd, "403 Forbidden", "Idegen eredet");
-            else if (!authed(&c, r)) reply_txt(c.fd, "401 Unauthorized", "PIN szükséges");
+            else if (!authed(&c, r)) reply_txt(c.fd, "401 Unauthorized", TR("PIN szükséges", "PIN required"));
             else ws_accept(&c, r);
         }
-        else reply_txt(c.fd, "404 Not Found", "Nincs ilyen oldal");
+        else reply_txt(c.fd, "404 Not Found", TR("Nincs ilyen oldal", "No such page"));
     }
     free(r);
 #ifdef HAVE_SSL
@@ -660,7 +672,7 @@ static int open_listener(int port, int tls) {
     if (inet_pton(AF_INET, g_cfg.web_bind, &sa.sin_addr) != 1) sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
     if (bind(ls, (struct sockaddr *)&sa, sizeof sa) || listen(ls, 16)) {
-        log_msg("A %d-es port nem nyitható meg: %s", port, strerror(errno));
+        log_msg(TR("A %d-es port nem nyitható meg: %s", "Cannot open port %d: %s"), port, strerror(errno));
         close(ls);
         return -1;
     }
@@ -706,7 +718,7 @@ static void tls_start(void) {
     snprintf(crt, sizeof crt, "%s/tls-cert.pem", g_cfg.cfg_dir);
     snprintf(key, sizeof key, "%s/tls-key.pem", g_cfg.cfg_dir);
     if (access(crt, R_OK) || access(key, R_OK)) {
-        if (make_cert(crt, key)) { log_msg("A HTTPS-tanúsítvány nem készült el, a mikrofon csak ezen a gépen működik"); g_cfg.tls_port = 0; return; }
+        if (make_cert(crt, key)) { log_msg(TR("A HTTPS-tanúsítvány nem készült el, a mikrofon csak ezen a gépen működik", "HTTPS certificate could not be made, the microphone works on this computer only")); g_cfg.tls_port = 0; return; }
     }
     tls_ctx = SSL_CTX_new(TLS_server_method());
     if (!tls_ctx) { g_cfg.tls_port = 0; return; }
@@ -714,7 +726,7 @@ static void tls_start(void) {
     SSL_CTX_set_mode(tls_ctx, SSL_MODE_AUTO_RETRY);
     if (SSL_CTX_use_certificate_file(tls_ctx, crt, SSL_FILETYPE_PEM) != 1 ||
         SSL_CTX_use_PrivateKey_file(tls_ctx, key, SSL_FILETYPE_PEM) != 1) {
-        log_msg("A HTTPS-tanúsítvány hibás. Töröld a tls-*.pem fájlokat, és indítsd újra.");
+        log_msg(TR("A HTTPS-tanúsítvány hibás. Töröld a tls-*.pem fájlokat, és indítsd újra.", "The HTTPS certificate is bad. Delete the tls-*.pem files and restart."));
         g_cfg.tls_port = 0;
         return;
     }
@@ -727,7 +739,7 @@ void web_start(void) {
 #ifdef HAVE_SSL
     if (g_cfg.tls_port) tls_start();
 #else
-    if (g_cfg.tls_port) log_msg("A program HTTPS nélkül készült, a telefon mikrofonja nem elérhető. Telepítsd a libssl-dev csomagot, és fordítsd újra.");
+    if (g_cfg.tls_port) log_msg(TR("A program HTTPS nélkül készült, a telefon mikrofonja nem elérhető. Telepítsd a libssl-dev csomagot, és fordítsd újra.", "The program was built without HTTPS, the phone microphone is not available. Install libssl-dev and rebuild."));
     g_cfg.tls_port = 0;
 #endif
     /* A sima port utoljára nyílik: ekkorra a beállítás már végleges */
@@ -736,19 +748,20 @@ void web_start(void) {
 
 void web_print_urls(void) {
     struct ifaddrs *ifa = NULL;
-    printf("\nFT-891 vezérlő " APP_VERSION "\n  Ezen a gépen:  http://127.0.0.1:%d\n", g_cfg.web_port);
+    printf(TR("\nFT891 Next " APP_VERSION "\n  Ezen a gépen:  http://127.0.0.1:%d\n",
+              "\nFT891 Next " APP_VERSION "\n  This computer:  http://127.0.0.1:%d\n"), g_cfg.web_port);
     if (strcmp(g_cfg.web_bind, "127.0.0.1") && !getifaddrs(&ifa)) {
         for (struct ifaddrs *i = ifa; i; i = i->ifa_next) {
             if (!i->ifa_addr || i->ifa_addr->sa_family != AF_INET) continue;
             char h[64];
             getnameinfo(i->ifa_addr, sizeof(struct sockaddr_in), h, sizeof h, NULL, 0, NI_NUMERICHOST);
             if (strncmp(h, "127.", 4)) {
-                printf("  Telefonról:    http://%s:%d\n", h, g_cfg.web_port);
-                if (g_cfg.tls_port) printf("  Mikrofonnal:   https://%s:%d\n", h, g_cfg.tls_port);
+                printf(TR("  Telefonról:    http://%s:%d\n", "  From a phone:   http://%s:%d\n"), h, g_cfg.web_port);
+                if (g_cfg.tls_port) printf(TR("  Mikrofonnal:   https://%s:%d\n", "  With mic:       https://%s:%d\n"), h, g_cfg.tls_port);
             }
         }
         freeifaddrs(ifa);
-        printf("  PIN-kód:       %s\n", g_cfg.pin);
+        printf(TR("  PIN-kód:       %s\n", "  PIN:            %s\n"), g_cfg.pin);
     }
     printf("\n");
     fflush(stdout);

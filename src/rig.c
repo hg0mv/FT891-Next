@@ -206,7 +206,7 @@ static void hw_ptt(int on) {
     if (ptt_fd < 0) return;
     int bits = g_cfg.ptt_method == 2 ? TIOCM_DTR : TIOCM_RTS;
     if (ioctl(ptt_fd, on ? TIOCMBIS : TIOCMBIC, &bits) < 0)
-        log_msg("A PTT-vonal nem állítható: %s", strerror(errno));
+        log_msg(TR("A PTT-vonal nem állítható: %s", "Cannot set the PTT line: %s"), strerror(errno));
 }
 
 static void ptt_port_close(void) {
@@ -242,7 +242,7 @@ static int ptt_port_open(void) {
     if (find_ptt_path(path, sizeof path)) return -1;
     int f = open_port(path, 9600, 0);
     if (f < 0) {
-        rig_notice(1, "A PTT-port nem nyitható meg (%s): %s", path, strerror(-f));
+        rig_notice(1, TR("A PTT-port nem nyitható meg (%s): %s", "Cannot open the PTT port (%s): %s"), path, strerror(-f));
         return -1;
     }
     ptt_fd = f;
@@ -275,8 +275,8 @@ static void drop_link(const char *why) {
     ptt_port_close();
     rxn = 0;
     clear_on_disconnect();
-    if (power_off_req) { power_off_req = 0; status("A rádió kikapcsolva."); log_msg("A rádió kikapcsolása után várakozás"); }
-    else status("Megszakadt a kapcsolat: %s", why);
+    if (power_off_req) { power_off_req = 0; status(TR("A rádió kikapcsolva.", "The radio is switched off.")); log_msg(TR("A rádió kikapcsolása után várakozás", "Waiting after switching the radio off")); }
+    else status(TR("Megszakadt a kapcsolat: %s", "Connection lost: %s"), why);
 }
 
 /* --- keretkezelés --- */
@@ -293,7 +293,7 @@ static int cat_write(const char *cmd) {
         if (w < 0 && errno != EAGAIN && errno != EINTR) { drop_link(strerror(errno)); return -1; }
         struct pollfd p = {fd, POLLOUT, 0};
         poll(&p, 1, 20);
-        if (now_ms() > end) { drop_link("az írás nem fejeződött be"); return -1; }
+        if (now_ms() > end) { drop_link(TR("az írás nem fejeződött be", "write did not complete")); return -1; }
     }
     return 0;
 }
@@ -320,13 +320,13 @@ static int read_frame(char *out, size_t cap, int timeout_ms, int use_wake) {
         int r = poll(p, use_wake ? 2 : 1, (int)left);
         if (r < 0) { if (errno == EINTR) continue; return -1; }
         if (use_wake && (p[1].revents & POLLIN)) return 0;
-        if (p[0].revents & (POLLERR | POLLNVAL)) { drop_link("a port eltűnt"); return -1; }
+        if (p[0].revents & (POLLERR | POLLNVAL)) { drop_link(TR("a port eltűnt", "the port disappeared")); return -1; }
         if (p[0].revents & (POLLIN | POLLHUP)) {
             if (rxn >= (int)sizeof rxbuf - 1) rxn = 0;    /* szemét, eldobjuk */
             ssize_t n = read(fd, rxbuf + rxn, sizeof rxbuf - 1 - (size_t)rxn);
             if (n > 0) rxn += (int)n;
             else if (n == 0 || (errno != EAGAIN && errno != EINTR)) {
-                drop_link("a port eltűnt");
+                drop_link(TR("a port eltűnt", "the port disappeared"));
                 return -1;
             }
         }
@@ -373,7 +373,7 @@ static int query(const char *cmd) {
     }
     if (fd < 0) return -1;
     LOCK(); S.timeouts++; S.seq++; UNLOCK();
-    if (++nto >= MAX_TIMEOUTS) drop_link("a rádió nem válaszol (kikapcsolták?)");
+    if (++nto >= MAX_TIMEOUTS) drop_link(TR("a rádió nem válaszol (kikapcsolták?)", "the radio does not answer (switched off?)"));
     return -1;
 }
 
@@ -393,10 +393,10 @@ static void on_tx_reply(int tx) {
     if (rekeys < 2) {
         rekeys++;
         verify_t = t;
-        log_msg("A rádió elengedte a CAT PTT-t, újra adásba teszem (%d. próba)", rekeys);
+        log_msg(TR("A rádió elengedte a CAT PTT-t, újra adásba teszem (%d. próba)", "The radio dropped CAT PTT, keying again (attempt %d)"), rekeys);
         cat_write("TX1;");
     } else {
-        rig_notice(1, "A rádió többször elengedte a CAT PTT-t. Próbáld ki az RTS módot a Beállításban.");
+        rig_notice(1, TR("A rádió többször elengedte a CAT PTT-t. Próbáld ki az RTS módot a Beállításban.", "The radio dropped CAT PTT several times. Try RTS mode in Settings."));
         guard = 1;
     }
 }
@@ -543,7 +543,7 @@ static int try_connect(void) {
     static const int rates[] = {38400, 19200, 9600, 4800};
     cand_t c[8];
     int n = scan_candidates(c, 8), denied = 0, busy = 0;
-    if (!n) { status("Nem találom a rádió USB-portját. Dugd be az USB-kábelt."); return 0; }
+    if (!n) { status(TR("Nem találom a rádió USB-portját. Dugd be az USB-kábelt.", "Cannot find the radio's USB port. Plug in the USB cable.")); return 0; }
     for (int i = 0; i < n; i++) {
         int order[5], k = 0;
         if (g_cfg.last_baud) order[k++] = g_cfg.last_baud;
@@ -562,16 +562,16 @@ static int try_connect(void) {
                 LOCK();
                 if (g_cfg.last_baud != order[b]) { g_cfg.last_baud = order[b]; config_save(); }
                 UNLOCK();
-                status("Kapcsolódva: %s, %d baud", c[i].path, order[b]);
+                status(TR("Kapcsolódva: %s, %d baud", "Connected: %s, %d baud"), c[i].path, order[b]);
                 nto = 0;
                 return 1;
             }
             if (r < 0) break;
         }
     }
-    if (denied) status("Nincs jogosultság a porthoz. Futtasd: sudo usermod -a -G dialout $USER, majd lépj be újra.");
-    else if (busy) status("A portot másik program használja. Állítsd le a rigctld-t vagy az flrig-et.");
-    else status("A rádió nem válaszol. Kapcsold be, és nézd meg a 05-08 CAT RTS menüt.");
+    if (denied) status(TR("Nincs jogosultság a porthoz. Futtasd: sudo usermod -a -G dialout $USER, majd lépj be újra.", "No permission for the port. Run: sudo usermod -a -G dialout $USER, then log in again."));
+    else if (busy) status(TR("A portot másik program használja. Állítsd le a rigctld-t vagy az flrig-et.", "Another program is using the port. Stop rigctld or flrig."));
+    else status(TR("A rádió nem válaszol. Kapcsold be, és nézd meg a 05-08 CAT RTS menüt.", "The radio does not answer. Switch it on and check menu 05-08 CAT RTS."));
     return 0;
 }
 
@@ -625,8 +625,10 @@ static void after_connect(void) {
         read_fw("EX1802;", S.fw_dsp);
         read_fw("EX1803;", S.fw_lcd);
     } else if (fd >= 0) {
-        rig_notice(1, "Eltérő menütáblát látok, ezért az oldalsáv-menüt nem írom. "
-                      "Az USB/LSB ilyenkor csak MD paranccsal működik.");
+        rig_notice(1, "%s", TR("Eltérő menütáblát látok, ezért az oldalsáv-menüt nem írom. "
+                               "Az USB/LSB ilyenkor csak MD paranccsal működik.",
+                               "The radio has a different menu table, so the sideband menu is not written. "
+                               "USB/LSB then works with the MD command only."));
     }
     query("FA;"); query("FB;"); query("IF;"); query("TX;"); query("SM0;");
     /* A felület és a külső programok csak beolvasott adatot lássanak */
@@ -637,7 +639,7 @@ static void after_connect(void) {
     }
     if (ok && fd >= 0) do_menu_read();
     if (fd >= 0) ptt_port_open();
-    if (fd >= 0) status("Kapcsolódva: %s, %d baud", S.port, S.baud);
+    if (fd >= 0) status(TR("Kapcsolódva: %s, %d baud", "Connected: %s, %d baud"), S.port, S.baud);
 }
 
 /* --- PTT --- */
@@ -648,7 +650,7 @@ static void key_on(void) {
     key_t0 = verify_t = t;
     rekeys = 0;
     SET(keyed, 1);
-    log_msg("Adás be (%s)", g_cfg.ptt_method == 0 ? "CAT" : g_cfg.ptt_method == 1 ? "RTS" : "DTR");
+    log_msg(TR("Adás be (%s)", "TX on (%s)"), g_cfg.ptt_method == 0 ? "CAT" : g_cfg.ptt_method == 1 ? "RTS" : "DTR");
 }
 
 static void key_off(void) {
@@ -663,13 +665,13 @@ static void key_off(void) {
         hw_ptt(0);
         if (fd >= 0) query("TX;");
     }
-    log_msg("Adás ki");
+    log_msg(TR("Adás ki", "TX off"));
     if (test_active) {
         test_active = 0;
-        if (g_cfg.ptt_method != 0) rig_notice(0, "PTT-teszt lefutott. Figyeld a rádió TX-jelzését: a program az RTS/DTR módot nem tudja visszaolvasni.");
-        else if (test_seen && !test_drop) rig_notice(0, "A PTT-teszt sikerült: a rádió adásba kapcsolt és ott is maradt.");
-        else if (test_seen) rig_notice(1, "PTT-teszt: a rádió adás közben elengedte a PTT-t.");
-        else rig_notice(1, "PTT-teszt: a rádió nem kapcsolt adásba.");
+        if (g_cfg.ptt_method != 0) rig_notice(0, TR("PTT-teszt lefutott. Figyeld a rádió TX-jelzését: a program az RTS/DTR módot nem tudja visszaolvasni.", "PTT test done. Watch the radio's TX indicator: the program cannot read back RTS/DTR mode."));
+        else if (test_seen && !test_drop) rig_notice(0, TR("A PTT-teszt sikerült: a rádió adásba kapcsolt és ott is maradt.", "PTT test passed: the radio went to TX and stayed there."));
+        else if (test_seen) rig_notice(1, TR("PTT-teszt: a rádió adás közben elengedte a PTT-t.", "PTT test: the radio dropped PTT during TX."));
+        else rig_notice(1, TR("PTT-teszt: a rádió nem kapcsolt adásba.", "PTT test: the radio did not go to TX."));
     }
 }
 
@@ -680,7 +682,7 @@ static void service_ptt(void) {
     for (int i = 0; i < 32; i++)
         if ((hold_mask >> i & 1) && lease[i] && t > lease[i]) {
             hold_mask &= ~(1u << i);
-            if (i != SRC_TEST) log_msg("A webes PTT jele elmaradt, elengedem az adást");
+            if (i != SRC_TEST) log_msg(TR("A webes PTT jele elmaradt, elengedem az adást", "Web PTT keep-alive missing, releasing TX"));
         }
     if (!hold_mask) guard = 0;
     int want = hold_mask != 0 && !guard;
@@ -692,7 +694,7 @@ static void service_ptt(void) {
     else if (keyed && max_s > 0 && t - key_t0 > max_s * 1000LL) {
         guard = 1;
         key_off();
-        rig_notice(1, "Az adásidő-korlát lejárt (%d mp), kikapcsoltam az adást. Engedd fel a PTT-t.", max_s);
+        rig_notice(1, TR("Az adásidő-korlát lejárt (%d mp), kikapcsoltam az adást. Engedd fel a PTT-t.", "TX time limit reached (%d s), TX switched off. Release PTT."), max_s);
     }
 }
 
@@ -718,18 +720,18 @@ static int do_mode(int m, int external) {
     int locked = g_cfg.mode_lock;
     UNLOCK();
     if (external && locked) {
-        log_msg("Módzár: külső módváltás figyelmen kívül hagyva");
+        log_msg(TR("Módzár: külső módváltás figyelmen kívül hagyva", "Mode lock: external mode change ignored"));
         return 0;
     }
-    if (s.keyed || s.tx) { rig_notice(1, "Adás közben nem váltok módot."); return -1; }
+    if (s.keyed || s.tx) { rig_notice(1, TR("Adás közben nem váltok módot.", "Mode cannot be changed during TX.")); return -1; }
     const char *md = NULL, *menu = NULL;
     int want = -1;
     switch (m) {
     case M_LSB: md = "MD01;"; menu = "1107"; want = 1; break;
     case M_USB: md = "MD02;"; menu = "1107"; want = 0; break;
     case M_SB_AUTO:
-        if (!s.menu_ok) { rig_notice(1, "Az automatikus oldalsáv ezen a rádión nem állítható innen."); return -1; }
-        if (set_bfo("1107", 2)) { rig_notice(1, "A rádió nem fogadta el az automatikus oldalsávot."); return -1; }
+        if (!s.menu_ok) { rig_notice(1, TR("Az automatikus oldalsáv ezen a rádión nem állítható innen.", "Automatic sideband cannot be set on this radio from here.")); return -1; }
+        if (set_bfo("1107", 2)) { rig_notice(1, TR("A rádió nem fogadta el az automatikus oldalsávot.", "The radio did not accept automatic sideband.")); return -1; }
         md = rig_ssb_eff(2, s.freq_a) ? "MD01;" : "MD02;";
         break;
     case M_CW:  md = "MD03;"; menu = "0707"; want = 0; break;
@@ -749,7 +751,7 @@ static int do_mode(int m, int external) {
                   !strcmp(menu, "0812") ? s.bfo_data : s.bfo_rtty;
         /* Ha már úgyis ez az oldalsáv, a menühöz nem nyúlunk: így marad meg az AUTO */
         if (cur < 0 || rig_ssb_eff(cur, s.freq_a) != want) {
-            if (set_bfo(menu, want)) { rig_notice(1, "A rádió nem fogadta el az oldalsáv-beállítást."); return -1; }
+            if (set_bfo(menu, want)) { rig_notice(1, TR("A rádió nem fogadta el az oldalsáv-beállítást.", "The radio did not accept the sideband setting.")); return -1; }
         }
     }
     if (cat_set(md)) return -1;
@@ -814,7 +816,7 @@ static int do_width(int idx) {
     rig_get(&s);
     int f = family(s.md), lim = f == 1 ? 21 : 17, split = f == 1 ? 9 : 10;
     char c[16];
-    if (f < 1 || f > 4) { rig_notice(1, "Ebben a módban nem állítható a szűrőszélesség."); return -1; }
+    if (f < 1 || f > 4) { rig_notice(1, TR("Ebben a módban nem állítható a szűrőszélesség.", "Filter width cannot be set in this mode.")); return -1; }
     if (idx < 1) idx = 1;
     if (idx > lim) idx = lim;
     if (cat_set(idx < split ? "NA01;" : "NA00;")) return -1;
@@ -834,16 +836,16 @@ static void power_on(void) {
     int baud = g_cfg.last_baud ? g_cfg.last_baud : 38400;
     UNLOCK();
     if (n) { snprintf(path, sizeof path, "%.255s", c[0].path); rts = c[0].trusted; }
-    if (!path[0]) { rig_notice(1, "Nem látom a rádió portját. Lehet, hogy kikapcsolva eltűnik, ilyenkor távolról nem kapcsolható be."); return; }
+    if (!path[0]) { rig_notice(1, TR("Nem látom a rádió portját. Lehet, hogy kikapcsolva eltűnik, ilyenkor távolról nem kapcsolható be.", "The radio's port is not visible. It may disappear when the radio is off; then it cannot be switched on remotely.")); return; }
     int f = open_port(path, baud, rts);
-    if (f < 0) { rig_notice(1, "A port nem nyitható meg: %s", strerror(-f)); return; }
+    if (f < 0) { rig_notice(1, TR("A port nem nyitható meg: %s", "Cannot open the port: %s"), strerror(-f)); return; }
     int ok = write(f, "PS1;", 4) == 4;
     usleep(1200000);
     ok = write(f, "PS1;", 4) == 4 && ok;
     tcdrain(f);
     close(f);
-    if (ok) rig_notice(0, "Bekapcsolási parancs elküldve. Pár másodperc múlva kapcsolódnia kell.");
-    else rig_notice(1, "A bekapcsolási parancs nem ment ki.");
+    if (ok) rig_notice(0, TR("Bekapcsolási parancs elküldve. Pár másodperc múlva kapcsolódnia kell.", "Power-on command sent. It should connect in a few seconds."));
+    else rig_notice(1, TR("A bekapcsolási parancs nem ment ki.", "The power-on command was not sent."));
 }
 
 static int run_job(const job_t *j) {
@@ -853,14 +855,14 @@ static int run_job(const job_t *j) {
     if (fd < 0) return -1;
     switch (j->op) {
     case OP_FREQ_A: case OP_FREQ_B:
-        if (a < 30000 || a > 56000000) { rig_notice(1, "Ez a frekvencia a rádió tartományán kívül esik."); return -1; }
+        if (a < 30000 || a > 56000000) { rig_notice(1, TR("Ez a frekvencia a rádió tartományán kívül esik.", "This frequency is outside the radio's range.")); return -1; }
         snprintf(c, sizeof c, "%s%09lld;", j->op == OP_FREQ_A ? "FA" : "FB", a);
         if (cat_set(c)) return -1;
         if (j->op == OP_FREQ_A) SET(freq_a, a); else SET(freq_b, a);
         return 0;
     case OP_MODE: return do_mode((int)a, (int)j->b);
     case OP_BAND:
-        if (S.keyed || S.tx) { rig_notice(1, "Adás közben nem váltok sávot."); return -1; }
+        if (S.keyed || S.tx) { rig_notice(1, TR("Adás közben nem váltok sávot.", "Band cannot be changed during TX.")); return -1; }
         snprintf(c, sizeof c, "BS%02d;", (int)a);
         if (cat_set(c)) return -1;
         cat_pause(100);
@@ -896,15 +898,15 @@ static int run_job(const job_t *j) {
         if (cat_set(c)) return -1;
         return verify_query("IF;");
     case OP_PTT_METHOD:
-        if (S.keyed) { rig_notice(1, "Adás közben nem váltok PTT-módot."); return -1; }
+        if (S.keyed) { rig_notice(1, TR("Adás közben nem váltok PTT-módot.", "PTT mode cannot be changed during TX.")); return -1; }
         if (a < 0 || a > 2) return -1;
         LOCK(); g_cfg.ptt_method = (int)a; config_save(); UNLOCK();
         r = ptt_port_open();
         LOCK(); S.seq++; UNLOCK();
-        if (!r) rig_notice(0, "PTT-mód: %s", a == 0 ? "CAT" : a == 1 ? "RTS" : "DTR");
+        if (!r) rig_notice(0, TR("PTT-mód: %s", "PTT mode: %s"), a == 0 ? "CAT" : a == 1 ? "RTS" : "DTR");
         return r;
     case OP_PTT_TEST:
-        if (S.keyed || S.tx) { rig_notice(1, "Adás közben nem indítható a PTT-teszt."); return -1; }
+        if (S.keyed || S.tx) { rig_notice(1, TR("Adás közben nem indítható a PTT-teszt.", "PTT test cannot start during TX.")); return -1; }
         test_active = 1; test_seen = 0; test_drop = 0;
         rig_hold(SRC_TEST, 1, 1000);
         return 0;
@@ -916,13 +918,13 @@ static int run_job(const job_t *j) {
     case OP_MEM_READ:   return mem_read();
     case OP_MEM_WRITE:  return mem_write();
     case OP_MEM_RECALL:
-        if (S.keyed || S.tx) { rig_notice(1, "Adás közben nem hívok elő csatornát."); return -1; }
+        if (S.keyed || S.tx) { rig_notice(1, TR("Adás közben nem hívok elő csatornát.", "Channel recall is not possible during TX.")); return -1; }
         r = mem_recall((int)a);
         query("FA;"); query("MD0;"); query("IF;");
         return r;
     case OP_POWER:
         if (!a) {
-            if (S.keyed || S.tx) { rig_notice(1, "Adás közben nem kapcsolom ki a rádiót."); return -1; }
+            if (S.keyed || S.tx) { rig_notice(1, TR("Adás közben nem kapcsolom ki a rádiót.", "The radio is not switched off during TX.")); return -1; }
             power_off_req = 1;
             cat_write("PS0;");
         }
@@ -1054,7 +1056,7 @@ void rig_job(const char *name, int i, int n) {
 /* --- külső felület --- */
 void rig_start(void) {
     S.bfo_ssb = S.bfo_cw = S.bfo_data = S.bfo_rtty = -1;
-    snprintf(S.status, sizeof S.status, "Indítás");
+    snprintf(S.status, sizeof S.status, "%s", TR("Indítás", "Starting"));
     if (pipe2(wake_p, O_NONBLOCK | O_CLOEXEC)) { perror("pipe"); exit(1); }
     pthread_create(&cat_th, NULL, cat_main, NULL);
 }
@@ -1130,6 +1132,14 @@ void rig_cfg_set_dev(const char *dev) {
     LOCK();
     snprintf(g_cfg.audio_dev, sizeof g_cfg.audio_dev, "%s", dev);
     config_save();
+    UNLOCK();
+}
+
+void set_lang(int en) {
+    LOCK();
+    g_cfg.lang_en = en ? 1 : 0;
+    config_save();
+    S.seq++;
     UNLOCK();
 }
 

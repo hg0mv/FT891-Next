@@ -117,7 +117,7 @@ static const char *canon(const char *w) {
 static int handle(cl_t *c, char *line) {
     /* Böngészőből küldött HTTP-kérés ne tudjon rigctld-parancsot csempészni */
     if (strstr(line, "HTTP/1.") || !strncasecmp(line, "Host:", 5) || !strncasecmp(line, "Origin:", 7)) {
-        log_msg("HTTP-kérés érkezett a rigctld-portra, a kapcsolatot bontom");
+        log_msg(TR("HTTP-kérés érkezett a rigctld-portra, a kapcsolatot bontom", "HTTP request on the rigctld port, closing the connection"));
         return 1;
     }
     char *save = NULL, *w = strtok_r(line, " \t\r\n", &save);
@@ -302,11 +302,11 @@ void rigsrv_start(void) {
     inet_pton(AF_INET, g_cfg.rig_bind, &sa.sin_addr);
     setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
     if (bind(ls, (struct sockaddr *)&sa, sizeof sa) || listen(ls, 8)) {
-        log_msg("A rigctld-port (%d) foglalt: %s. Állítsd le a rigctld-t.", g_cfg.rig_port, strerror(errno));
+        log_msg(TR("A rigctld-port (%d) foglalt: %s. Állítsd le a rigctld-t.", "The rigctld port (%d) is in use: %s. Stop rigctld."), g_cfg.rig_port, strerror(errno));
         close(ls);
         return;
     }
-    log_msg("rigctld-kompatibilis port: %s:%d", g_cfg.rig_bind, g_cfg.rig_port);
+    log_msg(TR("rigctld-kompatibilis port: %s:%d", "rigctld-compatible port: %s:%d"), g_cfg.rig_bind, g_cfg.rig_port);
     int *a = malloc(sizeof *a);
     *a = ls;
     pthread_t t;

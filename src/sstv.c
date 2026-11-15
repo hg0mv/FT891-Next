@@ -180,8 +180,8 @@ static void finish(const char *why) {
         char tmp[430];
         snprintf(path, sizeof path, "%s/%s.png", dir, nm);
         snprintf(tmp, sizeof tmp, "%s/%s.part", dir, nm);
-        if (save_png(tmp, M->w, M->h) || rename(tmp, path)) log_msg("Az SSTV-kép nem menthető");
-        else log_msg("SSTV-kép mentve: %s.png", nm);
+        if (save_png(tmp, M->w, M->h) || rename(tmp, path)) log_msg(TR("Az SSTV-kép nem menthető", "Cannot save the SSTV picture"));
+        else log_msg(TR("SSTV-kép mentve: %s.png", "SSTV picture saved: %s.png"), nm);
         int n = list_imgs(l, 256);
         for (int i = 0; i < n; i++) {
             if (i >= KEEP_IMAGES) { snprintf(path, sizeof path, "%s/%s", dir, l[i]); unlink(path); }
@@ -195,7 +195,7 @@ static void finish(const char *why) {
 
 static void start(int m, double ofs, double t0) {
     const mode_t_ *x = &MODES[m];
-    if (M) finish("Új kép kezdődött.");
+    if (M) finish(TR("Új kép kezdődött.", "A new picture started."));
     M = x;
     d_ofs = ofs;
     period = ms(x->period);
@@ -216,8 +216,8 @@ static void start(int m, double ofs, double t0) {
     active = 1;
     snprintf(st_mode, sizeof st_mode, "%s", x->name);
     pthread_mutex_unlock(&L);
-    msg("Kép vétele folyamatban.");
-    log_msg("SSTV: %s, elhangolás %+.0f Hz", x->name, ofs);
+    msg(TR("Kép vétele folyamatban.", "Receiving a picture."));
+    log_msg(TR("SSTV: %s, elhangolás %+.0f Hz", "SSTV: %s, offset %+.0f Hz"), x->name, ofs);
 }
 
 /* Egy csatorna képpontjai t-től kezdve */
@@ -347,9 +347,9 @@ static void run_lines(void) {
         decode_line(tnext);
         line += M->kind == K_PD ? 2 : 1;
         tnext += period;
-        if (line >= M->h) { finish("A kép elkészült."); return; }
+        if (line >= M->h) { finish(TR("A kép elkészült.", "Picture complete.")); return; }
         /* Hosszú jelvesztés után leáll, de legalább 5 mp-ig kitart */
-        if (misses * M->period > 8000 && misses >= 6) { finish("A jel elveszett, a kép megszakadt."); return; }
+        if (misses * M->period > 8000 && misses >= 6) { finish(TR("A jel elveszett, a kép megszakadt.", "Signal lost, picture stopped.")); return; }
     }
 }
 
@@ -375,7 +375,7 @@ static void check_vis(void) {
     if (ones & 1) return;      /* páros paritás */
     for (int i = 0; i < N_MODES; i++)
         if (MODES[i].vis == code) { start(i, d, (double)N); return; }
-    log_msg("SSTV: ismeretlen VIS-kód: %d", code);
+    log_msg(TR("SSTV: ismeretlen VIS-kód: %d", "SSTV: unknown VIS code: %d"), code);
 }
 
 /* --- hangminták: 8 kHz, a hangszálon --- */
@@ -425,7 +425,7 @@ void sstv_push(float y) {
         vbn = 0;
         if (on) check_vis();
     }
-    if (stop && M) finish("A vételt leállítottad.");
+    if (stop && M) finish(TR("A vételt leállítottad.", "Reception stopped."));
     if (man >= 0 && man < N_MODES) {
         /* Kézi indítás: nem tudjuk, hol tart a sor, ezért egy teljes sorhosszon keresünk */
         start(man, 0, (double)N + ms(MODES[man].period) * 0.6);
@@ -433,7 +433,7 @@ void sstv_push(float y) {
         fresh = 2;
     }
     if (M) {
-        if (rig_keyed()) { finish("Adás miatt megszakítva."); return; }
+        if (rig_keyed()) { finish(TR("Adás miatt megszakítva.", "Stopped because of TX.")); return; }
         run_lines();
     }
 }
@@ -444,7 +444,7 @@ void sstv_cmd(const char *what, int v) {
     if (!strcmp(what, "on")) {
         enabled = v != 0;
         if (!v) stop_req = 1;
-        snprintf(st_msg, sizeof st_msg, "%s", v ? "VIS-jelre várok." : "");
+        snprintf(st_msg, sizeof st_msg, "%s", v ? TR("VIS-jelre várok.", "Waiting for a VIS header.") : "");
     } else if (!strcmp(what, "go")) manual_req = v;
     else if (!strcmp(what, "stop")) stop_req = 1;
     int want = enabled;

@@ -362,6 +362,8 @@ dialog .k{width:100%;margin-top:10px}
       <div class="gal" id="ssg"></div>
     </section>
     <section class="tab" id="t4" hidden>
+      <div class="lab">Nyelv · Language</div>
+      <div class="g g3" id="langs"><button class="k" data-lng="0" lang="hu">Magyar</button><button class="k" data-lng="1" lang="en">English</button></div>
       <div class="lab">Rádió</div>
       <button class="k" id="pwr">Rádió kikapcsolása</button>
       <div class="lab">Hangkártya</div>
@@ -375,7 +377,7 @@ dialog .k{width:100%;margin-top:10px}
       <p class="hint" id="ptthint"></p>
       <div class="lab">PTT-teszt</div>
       <button class="k" id="ptest">Teszt: 1 mp adás</button>
-      <p class="hint">A mikrofon hangját ez a verzió nem viszi át a gépről vagy a telefonról. Az adásgomb a rádió saját hangbemenetét kapcsolja adásba.</p>
+      <p class="hint">A Mikrofon gombbal a gép vagy a telefon hangja megy adásba. Enélkül az adásgomb a rádió saját hangbemenetét kapcsolja adásba.</p>
       <div class="lab">Külső programok</div>
       <button class="k" id="mlock">Módzár</button>
       <p class="hint">Bekapcsolva a külső programok (pl. WSJT-X) nem válthatnak módot. Innen továbbra is válthatsz.</p>
@@ -406,6 +408,13 @@ dialog .k{width:100%;margin-top:10px}
 
 <script>
 "use strict";
+const EN=document.documentElement.lang==="en";
+const L=(hu,en)=>EN?en:hu;
+const DICT={"Nincs kapcsolat a géppel, újracsatlakozás folyamatban.": "No connection to the computer, reconnecting.", "Zár": "Lock", "VFO A frekvencia": "VFO A frequency", "Teljesítmény": "Power", "Lefelé hangolás": "Tune down", "Hangolószalag: húzd oldalra, vagy használd a nyilakat": "Tuning strip: drag sideways or use the arrow keys", "Felfelé hangolás": "Tune up", "Hangolási lépés": "Tuning step", "Beírás": "Enter", "Vízesés": "Waterfall", "Kattintás: hangolás": "Click: tune", "Hang": "Audio", "Mikrofon": "Mic", "Gép hangereje": "Computer volume", "Mikrofonszint": "Mic level", "Rádió bekapcsolása": "Power on radio", "Vízesés, kattintásra hangol": "Waterfall, click to tune", "Frekvencia MHz-ben, pl. 14.074": "Frequency in MHz, e.g. 14.074", "Hangolás": "Tune", "Üzem": "Operate", "Vétel": "Receive", "Szintek": "Levels", "Menü": "Menu", "Memória": "Memory", "Beállítás": "Settings", "Oldalsáv": "Sideband", "Automatikus": "Automatic", "Mód": "Mode", "Sáv": "Band", "Be": "On", "Nullázás": "Clear", "Áteresztősáv": "Passband", "Szűrőszélesség": "Filter width", "Szélesség": "Width", "Finomhangolás": "Fine tuning", "Zajcsökkentés": "Noise reduction", "Zajzár (NB)": "Noise blanker (NB)", "Bemenet": "Input", "Előerősítő": "Preamp", "Tárcsazár": "Dial lock", "Ki": "Off", "Gyors": "Fast", "Közép": "Mid", "Lassú": "Slow", "Adás": "Transmit", "Processzor": "Processor", "Mikrofon-EQ": "Mic EQ", "Mikrofon-EQ beállítása": "Mic EQ settings", "Normál": "Normal", "Processzorral": "With processor", "Az EQ-változások még nincsenek a rádióban": "EQ changes are not in the radio yet", "Írás a rádióba": "Write to radio", "Elvetés": "Discard", "A görbe közelítő, a tényleges hangot adás közben hallgasd vissza.": "The curve is approximate; listen to the real sound while transmitting.", "Profilok": "Profiles", "Új profil neve": "New profile name", "Csoport mentése profilként": "Save group as profile", "Menük": "Menus", "Keresés névben vagy leírásban": "Search name or description", "Csoport": "Group", "Beolvasás": "Read all", "Áttekintés": "Review", "Mentések": "Backups", "Minden írás előtt automatikusan mentés készül, az utolsó 20 marad meg.": "A backup is made before every write; the last 20 are kept.", "CSV letöltése": "Download CSV", "CSV betöltése": "Load CSV", "Üresek mutatása": "Show empty", "A rádió CAT-parancsaival csatornát törölni nem lehet, csak felülírni. A kihangsúlyozott sorok még nincsenek a rádióban.": "Channels cannot be deleted over CAT, only overwritten. Highlighted rows are not in the radio yet.", "Figyelés": "Listen", "SSTV-kép": "SSTV picture", "Kézi indítás, ha az elejét nem fogta a program": "Manual start, if the start of the picture was missed", "SSTV-mód": "SSTV mode", "Indítás": "Start", "Leállítás": "Stop", "Hallgasd az SSTV-frekvenciát, például a 14,230 MHz-et USB-n. A hangkártyát a Beállítás fülön választhatod ki. Adás közben a vétel leáll.": "Tune to an SSTV frequency, for example 14.230 MHz USB. Choose the sound card on the Settings tab. Reception stops while transmitting.", "Mentett képek": "Saved pictures", "Rádió": "Radio", "Rádió kikapcsolása": "Power off radio", "Hangkártya": "Sound card", "Nincs kiválasztva": "Not selected", "Ez a vízesés, a hang és a mikrofon eszköze. Ha a PSK- vagy SSTV-program is használja, a dsnoop kezdetű eszközt válaszd.": "Used for the waterfall, audio and microphone. If a PSK or SSTV program uses it too, choose the device starting with dsnoop.", "PTT módja": "PTT method", "PTT-teszt": "PTT test", "Teszt: 1 mp adás": "Test: 1 s transmit", "A Mikrofon gombbal a gép vagy a telefon hangja megy adásba. Enélkül az adásgomb a rádió saját hangbemenetét kapcsolja adásba.": "With the Mic button on, the computer or phone microphone is transmitted. Without it, the transmit button keys the radio with its own audio input.", "Külső programok": "Other programs", "Módzár": "Mode lock", "Bekapcsolva a külső programok (pl. WSJT-X) nem válthatnak módot. Innen továbbra is válthatsz.": "When on, other programs (e.g. WSJT-X) cannot change the mode. You can still change it here.", "Adásidő-korlát (másodperc)": "TX time limit (seconds)", "Mentés": "Save", "Kapcsolat": "Connection", "A rádió menübeállításai": "Radio menu settings", "Menük újraolvasása": "Read menus again", "Ezeket a rádión állítsd át, a program most csak olvassa őket.": "Change these on the radio; the program only reads them here.", "Napló": "Log", "Adás: tartsd nyomva": "Transmit: hold", "FT-891 vezérlő": "FT-891 control", "PIN-kód": "PIN", "A kódot a program indításkor kiírja a gép terminálablakába.": "The program prints the PIN in the terminal window when it starts.", "Belépés": "Log in"};
+if(EN){document.title=DICT[document.title]||document.title;
+  const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+  while((n=w.nextNode())){const t=n.nodeValue.trim();if(t&&DICT[t])n.nodeValue=n.nodeValue.replace(t,DICT[t])}
+  document.querySelectorAll("[placeholder],[aria-label],[title]").forEach(e=>["placeholder","aria-label","title"].forEach(a=>{const v=e.getAttribute(a);if(v&&DICT[v])e.setAttribute(a,DICT[v])}))}
 const $=id=>document.getElementById(id), S={st:{}, ws:null, step:100, faLocal:0, faT:0};
 const Au={ctx:null,gain:null,rx:false,next:0,mic:false,live:false,mg:1,fix:""};
 const SEGS={a:"8,0 52,0 44,8 16,8",b:"54,3 54,47 46,43 46,10",c:"54,53 54,97 46,90 46,57",
@@ -423,7 +432,7 @@ const digs=[];
   const box=$("freq");
   PLACES.forEach((p,i)=>{
     const b=document.createElement("button");
-    b.className="dig";b.setAttribute("aria-label",(p>=1e6?p/1e6+" MHz":p>=1e3?p/1e3+" kHz":p+" Hz")+" helyiérték: felső fele fel, alsó fele le");
+    b.className="dig";b.setAttribute("aria-label",(p>=1e6?p/1e6+" MHz":p>=1e3?p/1e3+" kHz":p+" Hz")+L(" helyiérték: felső fele fel, alsó fele le"," digit: upper half up, lower half down"));
     b.innerHTML='<svg viewBox="0 0 60 100" aria-hidden="true">'+Object.entries(SEGS).map(([k,v])=>`<polygon class="seg" data-s="${k}" points="${v}"/>`).join("")+"</svg>";
     b.addEventListener("click",e=>{const r=b.getBoundingClientRect();tune((e.clientY-r.top<r.height/2?1:-1)*p)});
     b.addEventListener("wheel",e=>{e.preventDefault();tune((e.deltaY<0?1:-1)*p)},{passive:false});
@@ -475,10 +484,11 @@ $("split").onclick=()=>send("split "+(S.st.split?0:1));
 $("clar").onclick=()=>send("clar "+(S.st.clar?0:1));
 $("mlock").onclick=()=>send("modelock "+(S.st.mode_lock?0:1));
 $("mread").onclick=()=>send("menuread");
+document.querySelectorAll("#langs .k").forEach(b=>{b.classList.toggle("on",(b.dataset.lng==="1")===EN);b.onclick=()=>send("lang "+b.dataset.lng)});
 $("txset").onclick=()=>send("txmax "+$("txmax").value);
 (function(){let armed=null;const b=$("ptest");b.onclick=()=>{
-  if(!armed){b.textContent="Biztos? A rádió 1 mp-re adásba kapcsol";armed=setTimeout(()=>{armed=null;b.textContent="Teszt: 1 mp adás"},4000);return}
-  clearTimeout(armed);armed=null;b.textContent="Teszt: 1 mp adás";send("ptttest")}})();
+  if(!armed){b.textContent=L("Biztos? A rádió 1 mp-re adásba kapcsol","Sure? The radio transmits for 1 s");armed=setTimeout(()=>{armed=null;b.textContent=L("Teszt: 1 mp adás","Test: 1 s transmit")},4000);return}
+  clearTimeout(armed);armed=null;b.textContent=L("Teszt: 1 mp adás","Test: 1 s transmit");send("ptttest")}})();
 
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
@@ -504,14 +514,14 @@ function slider(host,key,label,lvl,min,max,fmtv,step,pre){
   slider("h_"+k,k,t,0,a,b,v=>v+" Hz",st,"filt "+fv);
   const btn=$("b_"+k);btn.onclick=()=>send(`filt ${fo} ${S.st[on]?0:1}`);FT_BTN.push([btn,on]);
 });
-slider("slrx","nrl","DNR-szint",5,1,15);
-slider("slrx","nbl","NB-szint",6,0,10);
-slider("sllv","af","Hangerő",0,0,255);
-slider("sllv","rf","RF-erősítés",1,0,30);
-slider("sllv","sql","Zajzár",2,0,100);
-slider("sllv","pwr","Teljesítmény",3,5,100,v=>v+" W");
-slider("sllv","mic","Mikrofon",4,0,100);
-slider("sllv","procl","Processzor",7,0,100);
+slider("slrx","nrl",L("DNR-szint","DNR level"),5,1,15);
+slider("slrx","nbl",L("NB-szint","NB level"),6,0,10);
+slider("sllv","af",L("Hangerő","AF gain"),0,0,255);
+slider("sllv","rf",L("RF-erősítés","RF gain"),1,0,30);
+slider("sllv","sql",L("Zajzár","Squelch"),2,0,100);
+slider("sllv","pwr",L("Teljesítmény","Power"),3,5,100,v=>v+" W");
+slider("sllv","mic",L("Mikrofon","Mic gain"),4,0,100);
+slider("sllv","procl",L("Processzor","Processor"),7,0,100);
 (function(){const w=$("wsl");let t=0;w.addEventListener("input",()=>{S.wT=Date.now();$("wout").textContent=wTable()[w.value]+" Hz";
   clearTimeout(t);t=setTimeout(()=>send("width "+w.value),120)})})();
 const fam=()=>"12".includes(S.st.md)?1:"3769C8".includes(S.st.md)&&S.st.md?2:0;
@@ -519,8 +529,8 @@ const wTable=()=>fam()===1?WSSB:WCW;
 
 /* PTT: amíg nyomod, 400 ms-onként megerősíti; ha elmarad, a gép elengedi */
 (function(){const b=$("ptt");let t=null;
-  const on=()=>{if(t||b.disabled)return;if(Au.mic)send("txa 1");Au.live=true;send("ptt 1");t=setInterval(()=>send("ptt 1"),400);b.classList.add("live");b.textContent="Adás"};
-  const off=()=>{if(!t)return;clearInterval(t);t=null;Au.live=false;send("ptt 0");if(Au.mic)send("txa 0");b.classList.remove("live");b.textContent="Adás: tartsd nyomva"};
+  const on=()=>{if(t||b.disabled)return;if(Au.mic)send("txa 1");Au.live=true;send("ptt 1");t=setInterval(()=>send("ptt 1"),400);b.classList.add("live");b.textContent=L("Adás","Transmit")};
+  const off=()=>{if(!t)return;clearInterval(t);t=null;Au.live=false;send("ptt 0");if(Au.mic)send("txa 0");b.classList.remove("live");b.textContent=L("Adás: tartsd nyomva","Transmit: hold")};
   b.addEventListener("pointerdown",e=>{e.preventDefault();b.setPointerCapture(e.pointerId);on()});
   ["pointerup","pointercancel","lostpointercapture"].forEach(n=>b.addEventListener(n,off));
   b.addEventListener("keydown",e=>{if(e.key===" "&&!e.repeat){e.preventDefault();on()}});
@@ -534,24 +544,25 @@ const wTable=()=>fam()===1?WSSB:WCW;
 /* menüellenőrzés */
 const MENUS={
  "0506":["05-06 CAT RATE",["4800","9600","19200","38400"]],
- "0507":["05-07 CAT TOT",["10 ms","100 ms","1000 ms","3000 ms"],(v)=>v==="0"?"Állítsd legalább 100 ms-ra, a 10 ms megszakítást okozhat.":""],
- "0508":["05-08 CAT RTS",["Tiltva","Engedélyezve"],(v,s)=>v==="1"&&!s.rts_on?"A port azonosítatlan, RTS nélkül használom. Állítsd DISABLE-re.":""],
+ "0507":["05-07 CAT TOT",["10 ms","100 ms","1000 ms","3000 ms"],(v)=>v==="0"?L("Állítsd legalább 100 ms-ra, a 10 ms megszakítást okozhat.","Set at least 100 ms; 10 ms can break CAT replies."):""],
+ "0508":["05-08 CAT RTS",[L("Tiltva","Disable"),L("Engedélyezve","Enable")],(v,s)=>v==="1"&&!s.rts_on?L("A port azonosítatlan, RTS nélkül használom. Állítsd DISABLE-re.","The port is not recognised, so RTS is not used. Set it to DISABLE."):""],
  "0801":["08-01 DATA MODE",["PSK","OTHERS"]],
- "0809":["08-09 DATA IN SELECT",["MIC","REAR"],v=>v==="0"?"Digitális módokhoz REAR kell, ha hátul jön a hang.":""],
- "0810":["08-10 DATA PTT SELECT",["DAKY","RTS","DTR"],(v,s)=>s.ptt_method&&+v!==s.ptt_method?"Ez nem egyezik a kiválasztott PTT-móddal, így DATA módban nem lesz adás.":""],
+ "0809":["08-09 DATA IN SELECT",["MIC","REAR"],v=>v==="0"?L("Digitális módokhoz REAR kell, ha hátul jön a hang.","Digital modes need REAR when audio comes from the rear port."):""],
+ "0810":["08-10 DATA PTT SELECT",["DAKY","RTS","DTR"],(v,s)=>s.ptt_method&&+v!==s.ptt_method?L("Ez nem egyezik a kiválasztott PTT-móddal, így DATA módban nem lesz adás.","This does not match the selected PTT method, so DATA mode will not transmit."):""],
  "0812":["08-12 DATA BFO",["USB","LSB"]],
  "1105":["11-05 SSB MIC SELECT",["MIC","REAR"]],
- "1107":["11-07 SSB BFO",["USB","LSB","Automatikus"]],
- "1108":["11-08 SSB PTT SELECT",["DAKY","RTS","DTR"],(v,s)=>s.ptt_method&&+v!==s.ptt_method?"Ez nem egyezik a kiválasztott PTT-móddal, így SSB-ben nem lesz adás.":""],
- "0707":["07-07 CW BFO",["USB","LSB","Automatikus"]]};
+ "1107":["11-07 SSB BFO",["USB","LSB",L("Automatikus","Auto")]],
+ "1108":["11-08 SSB PTT SELECT",["DAKY","RTS","DTR"],(v,s)=>s.ptt_method&&+v!==s.ptt_method?L("Ez nem egyezik a kiválasztott PTT-móddal, így SSB-ben nem lesz adás.","This does not match the selected PTT method, so SSB will not transmit."):""],
+ "0707":["07-07 CW BFO",["USB","LSB",L("Automatikus","Auto")]]};
 function render(s){
+  if(s.lang&&(s.lang==="en")!==EN){S.pttOff&&S.pttOff();location.reload();return}
   S.st=s;const c=!!s.connected,tx=s.keyed||s.tx;
   $("lcd").classList.toggle("off",!c);
   if(Date.now()-S.faT>=900)showFreq(s.fa||0);
-  $("mode").textContent=c?s.mode:"Nincs rádió";
-  $("width").textContent=c?(s.width_hz/1000).toFixed(s.width_hz%100?2:1).replace(".",",")+" kHz":"";
+  $("mode").textContent=c?s.mode:L("Nincs rádió","No radio");
+  $("width").textContent=c?(s.width_hz/1000).toFixed(s.width_hz%100?2:1).replace(".",EN?".":",")+" kHz":"";
   $("fb").textContent=c?fmt(s.fb):"--";
-  $("chan").textContent=c&&s.mem_mode?"Memória "+s.channel:"";
+  $("chan").textContent=c&&s.mem_mode?L("Memória ","Memory ")+s.channel:"";
   $("fsplit").hidden=!s.split;$("fclar").hidden=!s.clar;$("fclar").textContent="Clar "+(s.clar_ofs>0?"+":"")+s.clar_ofs;
   $("flock").hidden=!s.lock;$("ftx").hidden=!tx;
   $("mrx").hidden=!!tx;$("mtx").hidden=!tx;
@@ -574,19 +585,19 @@ function render(s){
   const w=$("wsl"),tb=wTable(),f=fam();w.disabled=!f;w.max=tb.length-1;
   if(!(Date.now()-(S.wT||0)<1200)){w.value=s.width_idx||1;$("wout").textContent=f?s.width_hz+" Hz":"–"}
   document.querySelectorAll("#pttm .k").forEach(b=>b.classList.toggle("on",+b.dataset.m===s.ptt_method));
-  $("ptthint").textContent=s.ptt_method?(s.ptt_port?"Port: "+s.ptt_port:"A PTT-port nincs megnyitva."):"A PTT a CAT-porton megy. Ha adás közben leesik, próbáld az RTS módot.";
-  $("mlock").classList.toggle("on",!!s.mode_lock);$("mlock").textContent=s.mode_lock?"Módzár bekapcsolva":"Módzár kikapcsolva";
+  $("ptthint").textContent=s.ptt_method?(s.ptt_port?"Port: "+s.ptt_port:L("A PTT-port nincs megnyitva.","The PTT port is not open.")):L("A PTT a CAT-porton megy. Ha adás közben leesik, próbáld az RTS módot.","PTT goes over the CAT port. If it drops during TX, try RTS.");
+  $("mlock").classList.toggle("on",!!s.mode_lock);$("mlock").textContent=s.mode_lock?L("Módzár bekapcsolva","Mode lock on"):L("Módzár kikapcsolva","Mode lock off");
   if(document.activeElement!==$("txmax"))$("txmax").value=s.tx_max;
   const p=$("ptt");p.disabled=!c;
-  renderSstv(s);renderMic(s);$("pwrq").hidden=c;$("pwr").textContent=c?"Rádió kikapcsolása":"Rádió bekapcsolása";
-  $("httpsh").textContent=s.tls_port&&location.protocol==="http:"?`Telefon mikrofonjához ezt a címet nyisd meg: https://${location.hostname}:${s.tls_port}`:"";
+  renderSstv(s);renderMic(s);$("pwrq").hidden=c;$("pwr").textContent=c?L("Rádió kikapcsolása","Power off radio"):L("Rádió bekapcsolása","Power on radio");
+  $("httpsh").textContent=s.tls_port&&location.protocol==="http:"?L("Telefon mikrofonjához ezt a címet nyisd meg: ","For the phone microphone open: ")+`https://${location.hostname}:${s.tls_port}`:"";
   $("jobw").hidden=!s.job_n;
   if(s.job_n){$("jobt").textContent=`${s.job}: ${s.job_i} / ${s.job_n}`;$("jobb").style.width=(s.job_i/s.job_n*100)+"%"}
   if(s.data_seq!==S.dSeq){S.dSeq=s.data_seq;tabOpened()}
-  $("info").innerHTML="";[["Állapot",s.status],["Port",s.port||"–"],["Sebesség",s.baud?s.baud+" baud":"–"],
-    ["Firmware",s.fw_main?`fő ${s.fw_main}, DSP ${s.fw_dsp}, LCD ${s.fw_lcd}`:"–"],
-    ["Menütábla",s.menu_ok?"egyezik a CAT-könyvvel":"eltér vagy nem ismert"],
-    ["Adatforgalom",`${s.frames} válasz, ${s.timeouts} időtúllépés, ${s.drops} PTT-esés`]].forEach(([k,v])=>{
+  $("info").innerHTML="";[[L("Állapot","Status"),s.status],["Port",s.port||"–"],[L("Sebesség","Speed"),s.baud?s.baud+" baud":"–"],
+    ["Firmware",s.fw_main?`${L("fő","main")} ${s.fw_main}, DSP ${s.fw_dsp}, LCD ${s.fw_lcd}`:"–"],
+    [L("Menütábla","Menu table"),s.menu_ok?L("egyezik a CAT-könyvvel","matches the CAT manual"):L("eltér vagy nem ismert","different or unknown")],
+    [L("Adatforgalom","Traffic"),L(`${s.frames} válasz, ${s.timeouts} időtúllépés, ${s.drops} PTT-esés`,`${s.frames} replies, ${s.timeouts} timeouts, ${s.drops} PTT drops`)]].forEach(([k,v])=>{
       const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=k;dd.textContent=v;$("info").append(dt,dd)});
   const ul=$("check");ul.innerHTML="";Object.keys(s.menu||{}).sort().forEach(id=>{
     const m=MENUS[id];if(!m)return;const v=s.menu[id],li=document.createElement("li");
@@ -607,7 +618,7 @@ const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
 function label(d,v){
   if(v===undefined||v==="")return "–";
   if(d.k===0)return d.labels.split("|")[+v-d.min]??v;
-  if(d.k===3)return +v?(d.min+(+v-1)*d.step)+" "+d.unit:"Ki";
+  if(d.k===3)return +v?(d.min+(+v-1)*d.step)+" "+d.unit:L("Ki","Off");
   return (+v)+(d.unit?" "+d.unit:"");
 }
 function raw(d,num,cur){
@@ -617,10 +628,10 @@ function raw(d,num,cur){
 }
 async function api(u,body){
   const r=await fetch(u,body===undefined?{}:{method:"POST",body});
-  if(r.headers.get("Content-Type")!=="application/json")throw new Error("Nincs jogosultság");
+  if(r.headers.get("Content-Type")!=="application/json")throw new Error(L("Nincs jogosultság","Not authorised"));
   return r.json();
 }
-async function postMsg(u,body){try{const j=await api(u,body);if(j.ok===false)note(j.msg||"A művelet nem sikerült.",1);return j.ok!==false}catch(e){note(e.message,1);return false}}
+async function postMsg(u,body){try{const j=await api(u,body);if(j.ok===false)note(j.msg||L("A művelet nem sikerült.","The operation failed."),1);return j.ok!==false}catch(e){note(e.message,1);return false}}
 async function tabOpened(){
   try{
     if(S.tab==="t5"){const[m,p,b]=await Promise.all([api("/api/menus"),api("/api/profiles"),api("/api/backups")]);
@@ -630,25 +641,25 @@ async function tabOpened(){
     if(S.tab==="t3"){const m=await api("/api/menus");M.defs=m.defs;M.vals=m.vals;M.read=m.read;
       if(!M.read&&S.st.connected&&S.st.menu_ok&&!S.st.job_n&&!S.asked){S.asked=1;send("menusweep")}renderEq()}
     if(S.tab==="t4"){const l=await api("/api/audio"),sel=$("adev"),cur=S.st.wf_dev||"";
-      sel.innerHTML='<option value="">Nincs kiválasztva</option>'+l.map(d=>`<option value="${esc(d.name)}">${esc(d.desc+" ("+d.name+")")}</option>`).join("");sel.value=cur}
+      sel.innerHTML=`<option value="">${L("Nincs kiválasztva","Not selected")}</option>`+l.map(d=>`<option value="${esc(d.name)}">${esc(d.desc+" ("+d.name+")")}</option>`).join("");sel.value=cur}
     if(S.tab==="t7"){const l=await api("/api/sstv"),m=$("ssmode");
       if(!m.options.length)m.innerHTML=l.modes.map((n,i)=>`<option value="${i}">${esc(n)}</option>`).join("");
       if(!m.dataset.init){m.dataset.init="1";m.value=l.modes.indexOf("Scottie 2")}
       $("ssg").innerHTML=l.images.length?l.images.map(n=>{const u="/api/sstv-img?name="+encodeURIComponent(n),t=n.replace(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)\d\d-(.*)\.png$/,"$1.$2.$3. $4:$5 $6").replace(/_/g," ");
-        return `<a href="${u}" download="${esc(n)}"><img loading="lazy" src="${u}" alt="${esc(t)}">${esc(t)}</a>`}).join(""):'<p class="hint">Még nincs mentett kép.</p>'}
+        return `<a href="${u}" download="${esc(n)}"><img loading="lazy" src="${u}" alt="${esc(t)}">${esc(t)}</a>`}).join(""):`<p class="hint">${L("Még nincs mentett kép.","No saved pictures yet.")}</p>`}
     if(S.tab==="t6"){const m=await api("/api/mem");Mem.rows=m.rows;Mem.read=m.read;
       if(!m.read&&S.st.connected&&!S.st.job_n&&!S.askedM){S.askedM=1;send("memread")}renderMem()}
   }catch(e){}
 }
 function renderMenus(){
   const g=$("mgroup"),cur=g.value,gs=[...new Set(M.defs.map(d=>d.grp))];
-  g.innerHTML='<option value="">Minden csoport</option>'+gs.map(x=>`<option>${esc(x)}</option>`).join("");g.value=cur;
+  g.innerHTML=`<option value="">${L("Minden csoport","All groups")}</option>`+gs.map(x=>`<option>${esc(x)}</option>`).join("");g.value=cur;
   const q=$("msearch").value.toLowerCase();
-  const L=$("mlist");L.innerHTML="";
-  M.defs.filter(d=>d.prot!==2&&(M.vals[d.id]!==undefined||!M.read)&&(!g.value||d.grp===g.value)&&(!q||(d.name+" "+d.hu+" "+d.id).toLowerCase().includes(q))).forEach(d=>{
+  const ML=$("mlist");ML.innerHTML="";
+  M.defs.filter(d=>d.prot!==2&&(M.vals[d.id]!==undefined||!M.read)&&(!g.value||d.grp===g.value)&&(!q||(d.name+" "+d.desc+" "+d.id).toLowerCase().includes(q))).forEach(d=>{
     const w=document.createElement("div"),cv=M.vals[d.id],ev=M.edit[d.id]??cv;
     w.className="mi"+(M.edit[d.id]!==undefined?" ch":"");
-    w.innerHTML=`<div><b>${d.id.slice(0,2)}-${d.id.slice(2)} ${esc(d.name)}</b><small>${esc(d.hu)}</small></div>`;
+    w.innerHTML=`<div><b>${d.id.slice(0,2)}-${d.id.slice(2)} ${esc(d.name)}</b><small>${esc(d.desc)}</small></div>`;
     if(d.prot||cv===undefined){const s=document.createElement("div");s.className="prot";s.textContent=label(d,cv);w.append(s)}
     else if(d.k===0||d.k===3){const s=document.createElement("select");s.className="txt";s.setAttribute("aria-label",d.name);
       const n=d.k===0?d.max-d.min+1:d.max+1;
@@ -656,23 +667,23 @@ function renderMenus(){
       s.value=ev;s.onchange=()=>setEdit(d,s.value);w.append(s)}
     else{const i=document.createElement("input");i.className="txt";i.type="number";i.min=d.min;i.max=d.max;i.step=d.step;i.value=+ev;i.setAttribute("aria-label",d.name);
       i.onchange=()=>{const v=Math.max(d.min,Math.min(d.max,Math.round(+i.value)));i.value=v;setEdit(d,raw(d,v,cv))};w.append(i)}
-    L.append(w)});
-  if(!L.children.length)L.innerHTML='<p class="hint">Nincs találat.</p>';
+    ML.append(w)});
+  if(!ML.children.length)ML.innerHTML=`<p class="hint">${L("Nincs találat.","No match.")}</p>`;
   updBar();renderSets();
 }
 function setEdit(d,v){if(v===M.vals[d.id])delete M.edit[d.id];else M.edit[d.id]=v;renderMenus()}
-function updBar(){const n=Object.keys(M.edit).length;$("mbar").hidden=!n||!!$("pv").firstChild;$("mcount").textContent=n+" változás nincs még a rádióban"}
+function updBar(){const n=Object.keys(M.edit).length;$("mbar").hidden=!n||!!$("pv").firstChild;$("mcount").textContent=n+L(" változás nincs még a rádióban"," changes not in the radio yet")}
 function renderSets(){
   const P=$("profs");P.innerHTML="";M.profs.forEach(x=>{const b=document.createElement("button");b.className="k";b.textContent=x.name;b.onclick=()=>preview("profile",x);P.append(b)});
   const B=$("backs");B.innerHTML="";M.backs.slice(0,6).forEach(x=>{const b=document.createElement("button");b.className="k";
     b.textContent=x.name.replace(/^menu-(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)\d\d$/,"$1.$2.$3. $4:$5");b.onclick=()=>preview("backup",x);B.append(b)});
-  if(!M.backs.length)B.innerHTML='<p class="hint">Még nincs mentés.</p>';
+  if(!M.backs.length)B.innerHTML=`<p class="hint">${L("Még nincs mentés.","No backups yet.")}</p>`;
 }
 function diffs(items){
   const out=[];for(const id in items){const d=defOf(id);if(!d||d.prot||M.vals[id]===undefined||items[id]===M.vals[id])continue;out.push([d,M.vals[id],items[id]])}return out;
 }
 function showPv(title,lines,okText,onOk,extra){
-  const p=$("pv");p.innerHTML=`<div class="pv"><h2>${esc(title)}</h2>${lines.length?"<ul>"+lines.map(l=>`<li>${esc(l)}</li>`).join("")+"</ul>":'<p class="hint">Minden már így áll a rádión.</p>'}<div class="tools"><button class="k" id="pvok">${esc(okText)}</button><button class="k" id="pvno">Mégse</button></div></div>`;
+  const p=$("pv");p.innerHTML=`<div class="pv"><h2>${esc(title)}</h2>${lines.length?"<ul>"+lines.map(l=>`<li>${esc(l)}</li>`).join("")+"</ul>":`<p class="hint">${L("Minden már így áll a rádión.","The radio is already set like this.")}</p>`}<div class="tools"><button class="k" id="pvok">${esc(okText)}</button><button class="k" id="pvno">${L("Mégse","Cancel")}</button></div></div>`;
   updBar();
   $("pvok").onclick=()=>{p.innerHTML="";updBar();onOk()};$("pvno").onclick=()=>{p.innerHTML="";updBar()};
   if(extra){const b=document.createElement("button");b.className="k";b.textContent=extra[0];b.onclick=()=>{p.innerHTML="";updBar();extra[1]()};p.querySelector(".tools").append(b)}
@@ -680,23 +691,23 @@ function showPv(title,lines,okText,onOk,extra){
 }
 function preview(type,x){
   const ls=diffs(x.items).map(([d,a,b])=>`${d.name}: ${label(d,a)} → ${label(d,b)}`);
-  if(type==="profile"&&x.items.mode!==undefined)ls.push("Mód: "+(MODE_ENUM[x.items.mode]||x.items.mode));
-  showPv(type==="profile"?"Profil: "+x.name:"Mentés visszaállítása",ls,type==="profile"?"Alkalmazás":"Visszaállítás",
+  if(type==="profile"&&x.items.mode!==undefined)ls.push(L("Mód: ","Mode: ")+(MODE_ENUM[x.items.mode]||x.items.mode));
+  showPv(type==="profile"?L("Profil: ","Profile: ")+x.name:L("Mentés visszaállítása","Restore backup"),ls,type==="profile"?L("Alkalmazás","Apply"):L("Visszaállítás","Restore"),
     ()=>postMsg(`/api/apply?type=${type}&name=${encodeURIComponent(x.name)}`,""),
-    type==="profile"?["Profil törlése",async()=>{await postMsg("/api/profile-del?name="+encodeURIComponent(x.name),"");tabOpened()}]:null);
+    type==="profile"?[L("Profil törlése","Delete profile"),async()=>{await postMsg("/api/profile-del?name="+encodeURIComponent(x.name),"");tabOpened()}]:null);
 }
-const MODE_ENUM={0:"LSB",1:"USB",2:"Automatikus oldalsáv",3:"CW",4:"CW-L",5:"AM",6:"AM-N",7:"FM",8:"FM-N",9:"RTTY",10:"RTTY-U",11:"DATA-U",12:"DATA-L"};
+const MODE_ENUM={0:"LSB",1:"USB",2:L("Automatikus oldalsáv","Automatic sideband"),3:"CW",4:"CW-L",5:"AM",6:"AM-N",7:"FM",8:"FM-N",9:"RTTY",10:"RTTY-U",11:"DATA-U",12:"DATA-L"};
 $("msearch").oninput=renderMenus;$("mgroup").onchange=renderMenus;
 $("msweep").onclick=()=>send("menusweep");
 $("mdrop").onclick=()=>{M.edit={};renderMenus()};
 $("mreview").onclick=()=>{
   const ls=Object.keys(M.edit).map(id=>{const d=defOf(id);return `${d.name}: ${label(d,M.vals[id])} → ${label(d,M.edit[id])}`});
-  showPv("Írás a rádióba",ls,"Írás a rádióba",async()=>{const body=Object.entries(M.edit).map(([i,v])=>i+"="+v).join("\n");
+  showPv(L("Írás a rádióba","Write to radio"),ls,L("Írás a rádióba","Write to radio"),async()=>{const body=Object.entries(M.edit).map(([i,v])=>i+"="+v).join("\n");
     if(await postMsg("/api/write",body)){M.edit={};renderMenus()}})};
 $("psave").onclick=async()=>{
-  const n=$("pname").value.trim();if(!n){note("Adj nevet a profilnak.",1);return}
+  const n=$("pname").value.trim();if(!n){note(L("Adj nevet a profilnak.","Give the profile a name."),1);return}
   const g=$("mgroup").value;const body=M.defs.filter(d=>!d.prot&&M.vals[d.id]!==undefined&&(!g||d.grp===g)).map(d=>d.id+"="+(M.edit[d.id]??M.vals[d.id])).join("\n");
-  if(await postMsg("/api/profile?name="+encodeURIComponent(n),body)){$("pname").value="";note("Profil mentve: "+n);tabOpened()}};
+  if(await postMsg("/api/profile?name="+encodeURIComponent(n),body)){$("pname").value="";note(L("Profil mentve: ","Profile saved: ")+n);tabOpened()}};
 
 /* --- memóriák --- */
 const Mem={rows:[],edit:{},all:false,read:false};
@@ -704,15 +715,15 @@ const MDN={1:"LSB",2:"USB",3:"CW",7:"CW-R",4:"FM",B:"FM-N",5:"AM",D:"AM-N",6:"RT
 const rowOf=c=>Mem.edit[c]||Mem.rows.find(r=>r.ch===c);
 function mFreq(f){return f?(f/1e6).toFixed(6).replace(/\.?0+$/,""):""}
 function renderMem(){
-  const w=$("memw");w.innerHTML='<div class="mrow head"><span>Csat.</span><span>Frekvencia, MHz</span><span>Mód</span><span>Név</span><span>Eltolás</span><span></span></div>';
+  const w=$("memw");w.innerHTML=`<div class="mrow head"><span>${L("Csat.","Ch.")}</span><span>${L("Frekvencia, MHz","Frequency, MHz")}</span><span>${L("Mód","Mode")}</span><span>${L("Név","Name")}</span><span>${L("Eltolás","Shift")}</span><span></span></div>`;
   const list=Mem.rows.filter(r=>Mem.all||r.on||Mem.edit[r.ch]);
   list.forEach((o,i)=>{
     const r=Mem.edit[o.ch]||o,d=document.createElement("div");d.className="mrow"+(Mem.edit[o.ch]?" ch":"");
-    d.innerHTML=`<b>${esc(o.ch)}</b><input class="txt" aria-label="Frekvencia" inputmode="decimal" value="${mFreq(r.f)}" placeholder="üres">
-    <select class="txt" aria-label="Mód">${Object.entries(MDN).map(([k,v])=>`<option value="${k}"${(r.md||"2")===k?" selected":""}>${v}</option>`).join("")}</select>
-    <input class="txt nm" aria-label="Név" maxlength="12" value="${esc(r.tag||"")}">
-    <select class="txt" aria-label="Eltolás"><option value="0">Szimplex</option><option value="1">+</option><option value="2">−</option></select>
-    <button class="k">Előhívás</button>`;
+    d.innerHTML=`<b>${esc(o.ch)}</b><input class="txt" aria-label="${L("Frekvencia","Frequency")}" inputmode="decimal" value="${mFreq(r.f)}" placeholder="${L("üres","empty")}">
+    <select class="txt" aria-label="${L("Mód","Mode")}">${Object.entries(MDN).map(([k,v])=>`<option value="${k}"${(r.md||"2")===k?" selected":""}>${v}</option>`).join("")}</select>
+    <input class="txt nm" aria-label="${L("Név","Name")}" maxlength="12" value="${esc(r.tag||"")}">
+    <select class="txt" aria-label="${L("Eltolás","Shift")}"><option value="0">${L("Szimplex","Simplex")}</option><option value="1">+</option><option value="2">−</option></select>
+    <button class="k">${L("Előhívás","Recall")}</button>`;
     const[fi,ms,ti,ss,rb]=[d.children[1],d.children[2],d.children[3],d.children[4],d.children[5]];
     ss.value=r.shift||0;rb.disabled=!o.on;
     rb.onclick=()=>send("memrecall "+Mem.rows.indexOf(o));
@@ -721,9 +732,9 @@ function renderMem(){
       const n={...o,on:1,f,md:ms.value,tag:ti.value,shift:+ss.value,clar:o.clar||0,ofs:o.ofs||0,tone:o.tone||0};
       if(o.on&&n.f===o.f&&n.md===o.md&&n.tag===o.tag&&n.shift===o.shift)delete Mem.edit[o.ch];else Mem.edit[o.ch]=n;renderMem()};
     fi.onchange=upd;ms.onchange=upd;ti.onchange=upd;ss.onchange=upd;w.append(d)});
-  if(!list.length)w.insertAdjacentHTML("beforeend",`<p class="hint">${Mem.read?"Nincs tárolt csatorna. Az Üresek mutatása gombbal vehetsz fel újat.":"Nincs még beolvasva."}</p>`);
-  const n=Object.keys(Mem.edit).length;$("membar").hidden=!n;$("memcount").textContent=n+" csatorna nincs még a rádióban";
-  $("memall").textContent=Mem.all?"Üresek elrejtése":"Üresek mutatása";
+  if(!list.length)w.insertAdjacentHTML("beforeend",`<p class="hint">${Mem.read?L("Nincs tárolt csatorna. Az Üresek mutatása gombbal vehetsz fel újat.","No stored channels. Use Show empty to add one."):L("Nincs még beolvasva.","Not read yet.")}</p>`);
+  const n=Object.keys(Mem.edit).length;$("membar").hidden=!n;$("memcount").textContent=n+L(" csatorna nincs még a rádióban"," channels not in the radio yet");
+  $("memall").textContent=Mem.all?L("Üresek elrejtése","Hide empty"):L("Üresek mutatása","Show empty");
 }
 $("memsweep").onclick=()=>send("memread");
 $("memall").onclick=()=>{Mem.all=!Mem.all;renderMem()};
@@ -733,10 +744,10 @@ $("memwrite").onclick=async()=>{
   if(await postMsg("/api/mem-write",body)){Mem.edit={};renderMem()}};
 $("memcsv").onclick=()=>{
   const q=v=>/[",;\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
-  const lines=["csatorna,frekvencia_hz,mod,nev,eltolas,clar_be,clar_hz,hang"];
+  const lines=[EN?"channel,freq_hz,mode,name,shift,clar_on,clar_hz,tone":"csatorna,frekvencia_hz,mod,nev,eltolas,clar_be,clar_hz,hang"];
   Mem.rows.forEach(o=>{const r=rowOf(o.ch);if(r.on)lines.push([r.ch,r.f,MDN[r.md]||r.md,q(r.tag||""),r.shift||0,r.clar||0,r.ofs||0,r.tone||0].join(","))});
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([lines.join("\n")+"\n"],{type:"text/csv"}));
-  a.download="ft891-memoriak.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
+  a.download=L("ft891-memoriak.csv","ft891-memories.csv");a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
 function csvRows(t){
   const sep=t.split("\n")[0].includes(";")?";":",",rows=[];let row=[],f="",q=false;
   for(let i=0;i<t.length;i++){const c=t[i];
@@ -747,14 +758,15 @@ function csvRows(t){
 }
 $("memfile").onchange=async e=>{
   const file=e.target.files[0];if(!file)return;const rows=csvRows((await file.text()).replace(/^\uFEFF/,""));e.target.value="";
-  const h=(rows.shift()||[]).map(x=>x.trim().toLowerCase()),ix=n=>h.indexOf(n);
-  if(ix("csatorna")<0||ix("frekvencia_hz")<0){note("A CSV első sora ez legyen: csatorna, frekvencia_hz, mod, nev.",1);return}
+  const CSVEN={channel:"csatorna",freq_hz:"frekvencia_hz",mode:"mod",name:"nev",shift:"eltolas",clar_on:"clar_be",tone:"hang"};
+  const h=(rows.shift()||[]).map(x=>{x=x.trim().toLowerCase();return CSVEN[x]||x}),ix=n=>h.indexOf(n);
+  if(ix("csatorna")<0||ix("frekvencia_hz")<0){note(L("A CSV első sora ez legyen: csatorna, frekvencia_hz, mod, nev.","The first CSV line must be: channel, freq_hz, mode, name."),1);return}
   const byName=Object.fromEntries(Object.entries(MDN).map(([k,v])=>[v,k]));let n=0,bad=0;
   rows.forEach(c=>{const o=Mem.rows.find(r=>r.ch===(c[ix("csatorna")]||"").trim().padStart(3,"0")),f=+c[ix("frekvencia_hz")],md=byName[(c[ix("mod")]||"").trim().toUpperCase()];
     if(!o||!(f>=30000&&f<=56000000)||!md){bad++;return}
     const get=(k,d)=>ix(k)>=0?c[ix(k)]:d;
     Mem.edit[o.ch]={...o,on:1,f,md,tag:(get("nev","")||"").slice(0,12),shift:+get("eltolas",0)||0,clar:+get("clar_be",0)||0,ofs:+get("clar_hz",0)||0,tone:+get("hang",0)||0};n++});
-  Mem.all=false;renderMem();note(`${n} csatorna betöltve${bad?`, ${bad} sor hibás`:""}. Az Írás a rádióba gombbal kerül át.`,bad)};
+  Mem.all=false;renderMem();note(L(`${n} csatorna betöltve${bad?`, ${bad} sor hibás`:""}. Az Írás a rádióba gombbal kerül át.`,`${n} channels loaded${bad?`, ${bad} bad lines`:""}. Use Write to radio to send them.`),bad)};
 
 /* --- hang --- */
 const MU=(()=>{const t=new Float32Array(256);for(let i=0;i<256;i++){const u=~i&255,e=(u>>4)&7,m=u&15,x=(((m<<3)+132)<<e)-132;t[i]=(u&128?-x:x)/32768}return t})();
@@ -779,9 +791,9 @@ $("micg").oninput=e=>{$("mico").textContent=e.target.value+"%";Au.mg=e.target.va
 async function micToggle(){
   if(Au.mic){Au.mic=false;Au.st.getTracks().forEach(t=>t.stop());Au.proc.disconnect();Au.mc.close();$("micb").classList.remove("on");$("micw").hidden=$("micm").hidden=true;renderMic(S.st);return}
   if(!window.isSecureContext||!navigator.mediaDevices){
-    const p=S.st.tls_port;note(p?`A mikrofonhoz a titkosított címet nyisd meg: https://${location.hostname}:${p}`:"A böngésző csak titkosított kapcsolaton adja ki a mikrofont, és a program HTTPS nélkül készült.",1);return}
+    const p=S.st.tls_port;note(p?L("A mikrofonhoz a titkosított címet nyisd meg: ","For the microphone open the secure address: ")+`https://${location.hostname}:${p}`:L("A böngésző csak titkosított kapcsolaton adja ki a mikrofont, és a program HTTPS nélkül készült.","The browser gives the microphone only over HTTPS, and this program was built without HTTPS."),1);return}
   try{Au.st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}})}
-  catch(e){note("A böngésző nem adta ki a mikrofont. Engedélyezd a webhely beállításaiban.",1);return}
+  catch(e){note(L("A böngésző nem adta ki a mikrofont. Engedélyezd a webhely beállításaiban.","The browser did not give access to the microphone. Allow it in the site settings."),1);return}
   if(!S.st.wf_dev)await pickDev();
   const C=window.AudioContext||window.webkitAudioContext,c=Au.mc=new C(),src=c.createMediaStreamSource(Au.st),pr=Au.proc=c.createScriptProcessor(2048,1,1),z=c.createGain();
   z.gain.value=0;src.connect(pr);pr.connect(z);z.connect(c.destination);
@@ -797,14 +809,14 @@ $("micb").onclick=micToggle;
 function renderMic(s){
   const fam1="12".includes(s.md||"x"),fam4="8C".includes(s.md||"x"),id=fam1?"1105":fam4?"0809":"",v=id&&s.menu?s.menu[id]:undefined,h=$("mich"),f=$("micf");
   let t="",b="",w="";
-  if(Au.mic&&id&&v==="0"){t="A rádió most a saját mikrofonját használja, a gép hangja nem megy ki.";b="Hátsó bemenetre váltás";w=id+"=1"}
-  else if(!Au.mic&&fam1&&v==="1"){t="SSB-ben a hátsó bemenet él, ezért a rádió kézi mikrofonja nem megy.";b="Vissza a kézi mikrofonra";w="1105=0"}
+  if(Au.mic&&id&&v==="0"){t=L("A rádió most a saját mikrofonját használja, a gép hangja nem megy ki.","The radio uses its own microphone now, so the computer audio is not transmitted.");b=L("Hátsó bemenetre váltás","Switch to rear input");w=id+"=1"}
+  else if(!Au.mic&&fam1&&v==="1"){t=L("SSB-ben a hátsó bemenet él, ezért a rádió kézi mikrofonja nem megy.","SSB uses the rear input, so the hand microphone does not work.");b=L("Vissza a kézi mikrofonra","Back to hand microphone");w="1105=0"}
   h.hidden=!t;h.textContent=t;f.hidden=!b;$("micfb").textContent=b;Au.fix=w;
 }
 $("micfb").onclick=()=>{if(Au.fix)postMsg("/api/write",Au.fix)};
 (function(){let armed=null;function hit(b){const on=S.st.connected;
-    if(on&&!armed){b.textContent="Biztos? Kikapcsolom a rádiót";armed=setTimeout(()=>{armed=null;b.textContent="Rádió kikapcsolása"},4000);return}
-    clearTimeout(armed);armed=null;send("power "+(on?0:1));b.textContent=on?"Rádió bekapcsolása":"Rádió kikapcsolása"}
+    if(on&&!armed){b.textContent=L("Biztos? Kikapcsolom a rádiót","Sure? This powers off the radio");armed=setTimeout(()=>{armed=null;b.textContent=L("Rádió kikapcsolása","Power off radio")},4000);return}
+    clearTimeout(armed);armed=null;send("power "+(on?0:1));b.textContent=on?L("Rádió bekapcsolása","Power on radio"):L("Rádió kikapcsolása","Power off radio")}
   $("pwr").onclick=()=>hit($("pwr"));$("pwrqb").onclick=()=>hit($("pwrqb"));})();
 
 /* --- SSTV --- */
@@ -820,8 +832,8 @@ $("ssw").onclick=async()=>{const on=!(S.st.sstv&&S.st.sstv.on);if(on&&!S.st.wf_d
 $("ssgo").onclick=async()=>{if(!S.st.wf_dev)await pickDev();send("sstv 1");send("sstvgo "+$("ssmode").value)};
 $("ssstop").onclick=()=>send("sstvstop");
 function renderSstv(s){
-  const v=s.sstv||{};$("ssw").classList.toggle("on",!!v.on);$("ssw").textContent=v.on?"Figyelés bekapcsolva":"Figyelés kikapcsolva";
-  let t=v.msg||"";if(v.active)t=`${v.mode}: ${v.line} / ${v.h} sor`;else if(v.mode&&v.msg)t=`${v.mode}: ${v.msg}`;
+  const v=s.sstv||{};$("ssw").classList.toggle("on",!!v.on);$("ssw").textContent=v.on?L("Figyelés bekapcsolva","Listening on"):L("Figyelés kikapcsolva","Listening off");
+  let t=v.msg||"";if(v.active)t=`${v.mode}: ${v.line} / ${v.h} ${L("sor","lines")}`;else if(v.mode&&v.msg)t=`${v.mode}: ${v.msg}`;
   if(s.wf_status)t=s.wf_status;$("ssm").textContent=t;$("ssb").style.width=(v.h?v.line/v.h*100:0)+"%";
 }
 
@@ -861,7 +873,7 @@ async function pickDev(){
   try{const l=await api("/api/audio"),u=l.find(d=>d.name.startsWith("plughw")&&/usb/i.test(d.desc+d.name));if(u)send("wfdev "+u.name)}catch(e){}
 }
 $("wfon").onclick=()=>setWf(!S.wf);
-$("wfmode").onclick=()=>{WF.notch=!WF.notch;$("wfmode").textContent=WF.notch?"Kattintás: notch":"Kattintás: hangolás";$("wfmode").classList.toggle("on",WF.notch)};
+$("wfmode").onclick=()=>{WF.notch=!WF.notch;$("wfmode").textContent=WF.notch?L("Kattintás: notch","Click: notch"):L("Kattintás: hangolás","Click: tune");$("wfmode").classList.toggle("on",WF.notch)};
 $("wf").addEventListener("click",e=>{
   const r=e.currentTarget.getBoundingClientRect(),hz=Math.round((e.clientX-r.left)/r.width*3000),s=S.st;
   if(WF.notch){send("filt 3 "+hz);send("filt 2 1");return}
@@ -880,11 +892,11 @@ function renderEq(){
   const host=$("eqb");host.innerHTML="";
   for(let b=0;b<3;b++){
     const c=document.createElement("div"),[fi,li,wi]=[eqId(b,0),eqId(b,1),eqId(b,2)],fd=defOf(fi);
-    c.innerHTML=`<h3>${b+1}. sáv</h3><label>Frekvencia</label>`;
-    const s=document.createElement("select");s.className="txt";s.setAttribute("aria-label",(b+1)+". sáv frekvenciája");
+    c.innerHTML=EN?`<h3>Band ${b+1}</h3><label>Frequency</label>`:`<h3>${b+1}. sáv</h3><label>Frekvencia</label>`;
+    const s=document.createElement("select");s.className="txt";s.setAttribute("aria-label",EN?`Band ${b+1} frequency`:(b+1)+". sáv frekvenciája");
     for(let i=0;i<=fd.max;i++){const o=document.createElement("option");o.value=raw(fd,i,M.vals[fi]);o.textContent=label(fd,o.value);s.append(o)}
     s.value=eqV(fi);s.onchange=()=>eqSet(fi,s.value);c.append(s);
-    [[li,"Szint"],[wi,"Szélesség"]].forEach(([id,t])=>{const d=defOf(id),l=document.createElement("label");l.textContent=`${t}: ${label(d,eqV(id))}`;c.append(l);
+    [[li,L("Szint","Level")],[wi,L("Szélesség","Width")]].forEach(([id,t])=>{const d=defOf(id),l=document.createElement("label");l.textContent=`${t}: ${label(d,eqV(id))}`;c.append(l);
       const r=document.createElement("input");r.type="range";r.min=d.min;r.max=d.max;r.step=d.step;r.value=+eqV(id);r.setAttribute("aria-label",t);
       r.oninput=()=>{l.textContent=`${t}: ${label(d,raw(d,+r.value,M.vals[id]))}`};r.onchange=()=>eqSet(id,raw(d,+r.value,M.vals[id]));c.append(r)});
     host.append(c)}
@@ -919,7 +931,7 @@ $("loginf").onsubmit=async e=>{e.preventDefault();
   const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"pin="+encodeURIComponent($("pin").value)});
   if(r.ok){$("pin").value="";start();return}
   let j={};try{j=await r.json()}catch(x){}
-  $("pinmsg").textContent=j.wait?`Túl sok hibás próbálkozás. Próbáld újra ${j.wait} mp múlva.`:"Hibás PIN-kód.";
+  $("pinmsg").textContent=j.wait?L(`Túl sok hibás próbálkozás. Próbáld újra ${j.wait} mp múlva.`,`Too many wrong attempts. Try again in ${j.wait} s.`):L("Hibás PIN-kód.","Wrong PIN.");
 };
 try{const t=localStorage.getItem("tab");if(t)document.querySelector(`[data-tab=${t}]`).click();if(localStorage.getItem("wf")==="1"){S.wf=true;$("wfon").classList.add("on");$("wfw").hidden=false}}catch(e){}
 start();

@@ -4,11 +4,13 @@ A standalone control program for the Yaesu FT-891 on Linux. One background progr
 radio's CAT port; you control it from a web browser on the same computer, from your phone,
 and from other ham radio programs at the same time.
 
-**Status:** version 0.5. Rig control, menus, memories, waterfall, filters and remote audio are
+**Status:** version 0.6. Rig control, menus, memories, waterfall, filters and remote audio are
 tested on air with a real FT-891. The SSTV decoder is tested with generated signals only;
 on-air reports are welcome.
 
-The user interface is in Hungarian.
+The interface is available in **English and Hungarian**. The first start follows the system
+language (Hungarian on a Hungarian locale, English otherwise); change it on the Settings tab or
+with `--lang en` / `--lang hu`. The choice is saved.
 
 ## Features
 
@@ -56,10 +58,10 @@ computer itself.
 The program finds the radio's USB port and baud rate, then prints its addresses and PIN:
 
 ```text
-  Ezen a gépen:  http://127.0.0.1:8891      (this computer)
-  Telefonról:    http://192.168.1.20:8891   (phone)
-  Mikrofonnal:   https://192.168.1.20:8892  (phone with microphone)
-  PIN-kód:       123456
+  This computer:  http://127.0.0.1:8891
+  From a phone:   http://192.168.1.20:8891
+  With mic:       https://192.168.1.20:8892
+  PIN:            123456
 ```
 
 No PIN is needed on the computer itself. On a phone you enter it once; it is remembered for
@@ -116,10 +118,10 @@ CAT RTS, REF FREQ ADJ, EMERGENCY FREQ, the version menus or RESET, and never rea
 Menu 11-07 is written only when the radio's menu table matches the 2017 CAT reference
 (on an older table that number was SSB PTT SELECT).
 
-Memory CSV header (any column order):
+Memory CSV header (any column order; the Hungarian header of earlier versions is also read):
 
 ```text
-csatorna,frekvencia_hz,mod,nev,eltolas,clar_be,clar_hz,hang
+channel,freq_hz,mode,name,shift,clar_on,clar_hz,tone
 ```
 
 Modes: LSB, USB, CW, CW-R, FM, FM-N, AM, AM-N, RTTY-L, RTTY-U, DATA-L, DATA-U. Names up to
@@ -155,6 +157,7 @@ computer while the radio is off; try it at home before relying on it remotely.
 --trace           log every CAT command
 --config-dir PATH settings folder (~/.config/ft891ctl)
 --new-pin         make a new PIN
+--lang hu|en      interface and message language (default: system language)
 ```
 
 When something does not work, run `./ft891ctl --trace` and look at

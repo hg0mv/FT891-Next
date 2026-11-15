@@ -34,7 +34,7 @@ static int tx_fd = -1, tx_owner = -1;
 
 static void set_status(const char *s) {
     pthread_mutex_lock(&A);
-    if (strcmp(status_txt, s)) { snprintf(status_txt, sizeof status_txt, "%s", s); pthread_mutex_unlock(&A); log_msg("Vízesés: %s", s); rig_bump_only(); return; }
+    if (strcmp(status_txt, s)) { snprintf(status_txt, sizeof status_txt, "%s", s); pthread_mutex_unlock(&A); log_msg(TR("Vízesés: %s", "Waterfall: %s"), s); rig_bump_only(); return; }
     pthread_mutex_unlock(&A);
 }
 
@@ -178,7 +178,7 @@ int audio_tx_begin(int owner) {
     char dev[128], out[128], *argv[13];
     int x, y, z, p[2];
     rig_cfg_get(&x, &y, &z, dev, sizeof dev);
-    if (!dev[0]) { rig_notice(1, "Válaszd ki a hangkártyát a Beállításban."); return -1; }
+    if (!dev[0]) { rig_notice(1, TR("Válaszd ki a hangkártyát a Beállításban.", "Choose the sound card in Settings.")); return -1; }
     if (!strncmp(dev, "dsnoop:", 7)) snprintf(out, sizeof out, "dmix:%.120s", dev + 7);
     else snprintf(out, sizeof out, "%s", dev);
     pthread_mutex_lock(&A);
@@ -217,7 +217,7 @@ void audio_tx_write(int owner, const uint8_t *d, size_t n) {
     if (tx_owner == owner && tx_fd >= 0 && write(tx_fd, d, n) < 0 && errno == EPIPE) {
         tx_close_locked();
         pthread_mutex_unlock(&A);
-        rig_notice(1, "A hangkártyára nem lehet írni. Nézd meg a kiválasztott eszközt.");
+        rig_notice(1, TR("A hangkártyára nem lehet írni. Nézd meg a kiválasztott eszközt.", "Cannot write to the sound card. Check the selected device."));
         return;
     }
     pthread_mutex_unlock(&A);
@@ -286,7 +286,7 @@ static void capture(const char *dev, int channels) {
                     (char *)"-r", rate, (char *)"-c", ch, (char *)"-t", (char *)"raw", NULL};
     int fd, efd;
     pid_t p = spawn(argv, &fd, &efd);
-    if (p < 0) { set_status("Az arecord nem indítható."); return; }
+    if (p < 0) { set_status(TR("Az arecord nem indítható.", "Cannot start arecord.")); return; }
     static float ring[NFFT];
     int pos = 0, hop = 0;
     long long total = 0;
@@ -342,12 +342,12 @@ static void capture(const char *dev, int channels) {
     pthread_mutex_unlock(&A);
     if (wanted && !g_stop && !total) {
         char m[160];
-        if (WIFEXITED(st) && WEXITSTATUS(st) == 127) snprintf(m, sizeof m, "Nincs telepítve az arecord. Futtasd: sudo apt install alsa-utils");
-        else if (strstr(err, "busy")) snprintf(m, sizeof m, "A hangkártyát másik program használja. Válassz dsnoop eszközt a Beállításban.");
-        else snprintf(m, sizeof m, "A hangkártya nem nyitható meg: %.100s", dev);
+        if (WIFEXITED(st) && WEXITSTATUS(st) == 127) snprintf(m, sizeof m, TR("Nincs telepítve az arecord. Futtasd: sudo apt install alsa-utils", "arecord is not installed. Run: sudo apt install alsa-utils"));
+        else if (strstr(err, "busy")) snprintf(m, sizeof m, TR("A hangkártyát másik program használja. Válassz dsnoop eszközt a Beállításban.", "Another program is using the sound card. Choose a dsnoop device in Settings."));
+        else snprintf(m, sizeof m, TR("A hangkártya nem nyitható meg: %.100s", "Cannot open the sound card: %.100s"), dev);
         utf8_trim(m);
         set_status(m);
-    } else if (wanted && !g_stop) set_status("A hangkártya kapcsolata megszakadt.");
+    } else if (wanted && !g_stop) set_status(TR("A hangkártya kapcsolata megszakadt.", "The sound card connection was lost."));
 }
 
 static void *audio_main(void *arg) {
@@ -361,7 +361,7 @@ static void *audio_main(void *arg) {
         int x, y, z;
         rig_cfg_get(&x, &y, &z, dev, sizeof dev);
         if (!go || !dev[0]) {
-            if (go) set_status("Válaszd ki a hangkártyát a Beállításban.");
+            if (go) set_status(TR("Válaszd ki a hangkártyát a Beállításban.", "Choose the sound card in Settings."));
             usleep(200000);
             continue;
         }
