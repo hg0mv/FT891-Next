@@ -1,0 +1,5 @@
+# build output
+*.o
+/ft891ctl
+# python
+__pycache__/

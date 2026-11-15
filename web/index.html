@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#30353a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>FT-891 vezérlő</title>
+<style>
+:root{
+  --chassis:#30353a; --chassis-low:#272b2f; --key:#474d54; --key-top:#535a61; --key-edge:#1f2326;
+  --ink:#ece7da; --ink-dim:#b4b1a6; --lcd:#efa63a; --lcd-hi:#f6bb5a; --lcd-ink:#33200a;
+  --tx:#d92f27; --good:#8fc48a; --warn:#f0b35a;
+  --type:"Ubuntu","Cantarell","Noto Sans","Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--chassis);color:var(--ink);font:16px/1.4 var(--type);
+  padding:max(10px,env(safe-area-inset-top)) 12px calc(96px + env(safe-area-inset-bottom));
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--lcd-hi);outline-offset:2px}
+
+.deck{max-width:1400px;margin:0 auto;display:grid;gap:14px}
+.left,.right{min-width:0;display:grid;gap:12px;align-content:start}
+
+/* LCD: ez a felület egyetlen hangos eleme */
+.bezel{background:var(--chassis-low);padding:7px;border-radius:9px;box-shadow:inset 0 1px 3px #0009}
+.lcd{background:linear-gradient(170deg,var(--lcd-hi),var(--lcd) 55%,#e39630);color:var(--lcd-ink);
+  border-radius:3px;padding:8px 10px 10px;transition:filter .4s;user-select:none;-webkit-user-select:none}
+.lcd.off{filter:grayscale(1) brightness(.5)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.flags{font-weight:700;font-size:15px;min-height:22px;gap:12px;justify-content:flex-start}
+.flags .mode{font-size:17px}
+.flags .spacer{flex:1}
+.flag-tx{background:var(--lcd-ink);color:var(--lcd-hi);padding:0 7px;border-radius:2px}
+.freq{display:flex;align-items:stretch;margin:6px 0 4px;gap:1.2%}
+.dig{flex:1 1 0;min-width:0;background:none;border:0;padding:0;cursor:ns-resize;touch-action:none}
+.dig svg{display:block;width:100%;height:auto}
+.seg{fill:var(--lcd-ink);opacity:.055}
+.seg.on{opacity:1}
+.dot{flex:0 0 2.2%;display:flex;align-items:flex-end;padding-bottom:1%}
+.dot i{display:block;width:100%;aspect-ratio:1;background:var(--lcd-ink)}
+.sub{font-weight:600;font-size:15px}
+.meter{margin-top:7px}
+.scale{display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:0 1px}
+.bar{height:12px;position:relative;background:repeating-linear-gradient(90deg,#33200a1c 0 5px,transparent 5px 7px)}
+.bar i{position:absolute;inset:0 auto 0 0;background:repeating-linear-gradient(90deg,var(--lcd-ink) 0 5px,transparent 5px 7px);transition:width .12s linear}
+.txbars{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:center;font-size:12px;font-weight:700}
+.txbars .bar{height:9px}
+
+.notice{font-size:15px;padding:6px 2px;color:var(--good);min-height:1.4em}
+.notice.bad{color:var(--warn)}
+
+/* hangolószalag */
+.tune{display:grid;grid-template-columns:56px 1fr 56px;gap:8px}
+.ribs{height:56px;border-radius:6px;cursor:ew-resize;touch-action:none;border:0;padding:0;
+  background-color:var(--key-edge);
+  background-image:repeating-linear-gradient(90deg,#6a7178 0 3px,#2b2f33 3px 11px);
+  box-shadow:inset 18px 0 14px -8px #000c,inset -18px 0 14px -8px #000c}
+.steps{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+/* gombok: gumi billentyűk, a világító csík jelzi a bekapcsolt állapotot */
+.k{background:linear-gradient(var(--key-top),var(--key));border:0;border-bottom:3px solid var(--key-edge);
+  border-radius:6px;min-height:44px;padding:6px 10px;cursor:pointer;font-weight:600;position:relative}
+.k:active{transform:translateY(2px);border-bottom-width:1px;margin-bottom:2px}
+.k.on{box-shadow:inset 0 3px 0 var(--lcd-hi);color:#fff}
+.k:disabled{opacity:.45;cursor:not-allowed}
+.g{display:grid;gap:6px}
+.g5{grid-template-columns:repeat(5,1fr)}.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+.lab{font-size:14px;color:var(--ink-dim);margin:10px 0 5px}
+.lab:first-child{margin-top:0}
+
+nav{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;border-bottom:2px solid var(--key-edge)}
+@media (max-width:520px){nav{grid-template-columns:repeat(4,1fr)}}
+nav button{flex:1;background:none;border:0;padding:11px 4px;cursor:pointer;color:var(--ink-dim);font-weight:600;min-height:44px}
+nav button[aria-selected=true]{color:var(--ink);box-shadow:inset 0 -3px 0 var(--lcd-hi)}
+.tab{padding-top:10px}
+
+.sl{display:grid;grid-template-columns:7.5em 1fr 4.4em;align-items:center;gap:10px;min-height:44px}
+.sl output{text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;height:32px;background:none;-webkit-appearance:none;appearance:none;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--key-edge);border-radius:3px}
+input[type=range]::-moz-range-track{height:6px;background:var(--key-edge);border-radius:3px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;border:0;background:linear-gradient(var(--key-top),var(--key));box-shadow:0 2px 0 var(--key-edge),inset 0 0 0 2px #0003}
+input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;border:0;background:var(--key-top);box-shadow:0 2px 0 var(--key-edge)}
+
+.info{display:grid;grid-template-columns:max-content 1fr;gap:3px 12px;margin:0}
+.info dt{color:var(--ink-dim)}.info dd{margin:0;overflow-wrap:anywhere}
+.check{list-style:none;margin:0;padding:0}
+.check li{padding:7px 0;border-bottom:1px solid #fff1}
+.check b{font-weight:600}
+.check small{display:block;color:var(--warn);font-size:14px}
+.txt{background:var(--chassis-low);border:1px solid #0006;border-radius:5px;padding:9px;width:100%;min-height:44px}
+pre{background:var(--chassis-low);padding:8px;border-radius:5px;max-height:240px;overflow:auto;font-size:13px;white-space:pre-wrap;margin:0;font-family:ui-monospace,"Ubuntu Mono",monospace}
+.hint{font-size:14px;color:var(--ink-dim);margin:6px 0 0}
+
+/* PTT: telefonon a hüvelykujj alatt */
+.job{height:6px;background:var(--key-edge);border-radius:3px;overflow:hidden}
+.job i{display:block;height:100%;background:var(--lcd-hi);width:0}
+.tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.tools .txt{flex:1 1 160px;width:auto}
+select.txt{appearance:auto}
+.mi{display:grid;grid-template-columns:minmax(0,1fr) 160px;gap:4px 12px;align-items:center;padding:8px 0;border-bottom:1px solid #fff1}
+.mi.ch{box-shadow:inset 3px 0 0 var(--lcd-hi);padding-left:9px}
+.mi small{display:block;color:var(--ink-dim);font-size:14px}
+.mi b{font-weight:600}
+.mi .prot{color:var(--ink-dim);text-align:right}
+.bar2{position:sticky;bottom:90px;background:var(--chassis-low);padding:8px;border-radius:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;z-index:3}
+.bar2 span{flex:1 1 120px}
+.pv{background:var(--chassis-low);padding:10px;border-radius:6px;margin:8px 0}
+.pv h2{font-size:16px;margin:0 0 6px}
+.pv ul{list-style:none;margin:0 0 8px;padding:0;max-height:260px;overflow:auto}
+.pv li{padding:3px 0}
+.mrow{display:grid;grid-template-columns:44px minmax(110px,1.1fr) minmax(90px,.8fr) minmax(110px,1.1fr) minmax(90px,.8fr) 96px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid #fff1}
+.mrow.head{color:var(--ink-dim);font-size:14px;border:0}
+.mrow.ch{box-shadow:inset 3px 0 0 var(--lcd-hi)}
+.mrow .txt{padding:6px;min-height:40px}
+.mrow .k{min-height:40px;padding:4px}
+@media (max-width:640px){
+  .mrow{grid-template-columns:44px 1fr 1fr}
+  .mrow.head{display:none}
+  .mrow .nm{grid-column:2}
+  .mrow .k{grid-column:2 / 4}
+  .mi{grid-template-columns:minmax(0,1fr) 130px}
+}
+.wf{position:relative;background:var(--chassis-low);border-radius:6px;overflow:hidden;cursor:crosshair;touch-action:none}
+.wf canvas{display:block;width:100%;height:150px}
+.wf .pb{position:absolute;top:0;bottom:0;border-left:1px solid var(--lcd-hi);border-right:1px solid var(--lcd-hi);background:#f6bb5a14;pointer-events:none}
+.wf .nl{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--tx);pointer-events:none}
+.axis{position:relative;height:18px;font-size:12px;color:var(--ink-dim)}
+.axis span{position:absolute;top:2px;transform:translateX(-50%);white-space:nowrap}
+.axis span:first-child{transform:none}.axis span:last-child{transform:translateX(-100%)}
+.fr{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center}
+.fr .sl{grid-template-columns:1fr 4.2em}
+.fr .sl label{display:none}
+.pbv{display:block;width:100%;height:56px;background:var(--chassis-low);border-radius:5px;margin-bottom:6px}
+.eqg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.eqg h3{font-size:15px;font-weight:600;margin:0 0 4px}
+.eqg label{display:block;font-size:14px;color:var(--ink-dim);margin-top:6px}
+.eqg .txt{padding:6px}
+#sc{display:block;width:100%;max-width:640px;background:var(--chassis-low);border-radius:5px}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:6px}
+.gal a{display:block;color:var(--ink-dim);font-size:13px;text-decoration:none;overflow-wrap:anywhere}
+.gal img{display:block;width:100%;border-radius:4px;background:var(--chassis-low)}
+.ptt{position:fixed;left:0;right:0;bottom:0;padding:8px 12px calc(10px + env(safe-area-inset-bottom));background:var(--chassis);box-shadow:0 -1px 0 var(--key-edge);z-index:5}
+.ptt button{display:block;width:100%;max-width:1120px;margin:0 auto;min-height:66px;border:0;border-radius:8px;font-weight:700;font-size:19px;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;
+  background:#7a2a26;color:#ffe9e3;border-bottom:4px solid #4c1613}
+.ptt button.live{background:var(--tx);color:#fff}
+.ptt button:disabled{background:var(--key);color:var(--ink-dim);border-bottom-color:var(--key-edge);cursor:not-allowed}
+
+.link{background:var(--warn);color:#2a1a05;padding:7px 10px;border-radius:5px;font-weight:600}
+dialog{background:var(--chassis);color:var(--ink);border:0;border-radius:9px;padding:18px;width:min(340px,calc(100vw - 32px));box-shadow:0 0 0 1px var(--key-edge)}
+dialog::backdrop{background:#000a}
+dialog h1{font-size:20px;margin:0 0 10px}
+dialog .k{width:100%;margin-top:10px}
+
+@media (min-width:900px){
+  body{padding:18px 20px 110px}
+  .deck{grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:22px;max-width:1120px}
+  .deck.wide{grid-template-columns:minmax(0,420px) minmax(0,1fr);max-width:1400px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="left">
+    <div class="link" id="link" hidden>Nincs kapcsolat a géppel, újracsatlakozás folyamatban.</div>
+    <div class="bezel"><div class="lcd off" id="lcd">
+      <div class="row flags">
+        <span class="mode" id="mode">--</span>
+        <span id="width"></span>
+        <span id="fsplit" hidden>Split</span>
+        <span id="fclar" hidden></span>
+        <span id="flock" hidden>Zár</span>
+        <span class="spacer"></span>
+        <span class="flag-tx" id="ftx" hidden>TX</span>
+      </div>
+      <div class="freq" id="freq" role="group" aria-label="VFO A frekvencia"></div>
+      <div class="row sub"><span>VFO B <span id="fb">--</span></span><span id="chan"></span></div>
+      <div class="meter" id="mrx">
+        <div class="scale"><span>S1</span><span>3</span><span>5</span><span>7</span><span>9</span><span>+20</span><span>+40</span><span>+60</span></div>
+        <div class="bar"><i id="sbar" style="width:0"></i></div>
+      </div>
+      <div class="meter txbars" id="mtx" hidden>
+        <span>Teljesítmény</span><div class="bar"><i id="pbar" style="width:0"></i></div>
+        <span>SWR</span><div class="bar"><i id="wbar" style="width:0"></i></div>
+        <span>ALC</span><div class="bar"><i id="abar" style="width:0"></i></div>
+      </div>
+    </div></div>
+    <div class="notice" id="notice" role="status"></div>
+    <div id="jobw" hidden><div class="hint" id="jobt"></div><div class="job"><i id="jobb"></i></div></div>
+    <div class="tune">
+      <button class="k" id="dn" aria-label="Lefelé hangolás">−</button>
+      <button class="ribs" id="ribs" aria-label="Hangolószalag: húzd oldalra, vagy használd a nyilakat"></button>
+      <button class="k" id="up" aria-label="Felfelé hangolás">+</button>
+    </div>
+    <div class="steps" role="group" aria-label="Hangolási lépés">
+      <button class="k" data-step="10">10 Hz</button><button class="k" data-step="100">100 Hz</button>
+      <button class="k" data-step="1000">1 kHz</button><button class="k" data-step="10000">10 kHz</button>
+      <button class="k" id="entry">Beírás</button>
+    </div>
+    <div class="tools" style="margin:0">
+      <button class="k" id="wfon">Vízesés</button>
+      <button class="k" id="wfmode">Kattintás: hangolás</button>
+      <button class="k" id="rxb">Hang</button>
+      <button class="k" id="micb">Mikrofon</button>
+    </div>
+    <div class="sl" id="volw" hidden><label for="vol">Gép hangereje</label><input type="range" id="vol" min="0" max="200" value="100"><output id="volo">100%</output></div>
+    <div class="sl" id="micw" hidden><label for="micg">Mikrofonszint</label><input type="range" id="micg" min="0" max="200" value="100"><output id="mico">100%</output></div>
+    <div class="job" id="micm" hidden><i id="micl"></i></div>
+    <p class="hint" id="mich" hidden></p>
+    <div class="tools" id="micf" hidden><button class="k" id="micfb"></button></div>
+    <div class="tools" id="pwrq" hidden><button class="k" id="pwrqb">Rádió bekapcsolása</button></div>
+    <div id="wfw" hidden>
+      <div class="wf" id="wf"><canvas id="wfc" width="512" height="150" aria-label="Vízesés, kattintásra hangol"></canvas><div class="pb" id="wfpb"></div><div class="nl" id="wfnl" hidden></div></div>
+      <div class="axis"><span style="left:0">0</span><span style="left:16.667%">500</span><span style="left:33.333%">1000</span><span style="left:50%">1500</span><span style="left:66.667%">2000</span><span style="left:83.333%">2500</span><span style="left:100%">3000 Hz</span></div>
+    </div>
+    <p class="hint" id="wfmsg" hidden></p>
+    <form id="entryf" hidden class="row">
+      <input class="txt" id="entryv" inputmode="decimal" placeholder="Frekvencia MHz-ben, pl. 14.074" autocomplete="off">
+      <button class="k" type="submit">Hangolás</button>
+    </form>
+  </div>
+
+  <div class="right">
+    <nav role="tablist">
+      <button role="tab" aria-selected="true" data-tab="t1">Üzem</button>
+      <button role="tab" aria-selected="false" data-tab="t2">Vétel</button>
+      <button role="tab" aria-selected="false" data-tab="t3">Szintek</button>
+      <button role="tab" aria-selected="false" data-tab="t5">Menü</button>
+      <button role="tab" aria-selected="false" data-tab="t6">Memória</button>
+      <button role="tab" aria-selected="false" data-tab="t7">SSTV</button>
+      <button role="tab" aria-selected="false" data-tab="t4">Beállítás</button>
+    </nav>
+    <section class="tab" id="t1">
+      <div class="lab">Oldalsáv</div>
+      <div class="g g3">
+        <button class="k" data-mode="0" id="mLSB">LSB</button>
+        <button class="k" data-mode="1" id="mUSB">USB</button>
+        <button class="k" data-mode="2" id="mAuto">Automatikus</button>
+      </div>
+      <div class="lab">Mód</div>
+      <div class="g g4" id="modes">
+        <button class="k" data-mode="3" data-n="CW-U">CW</button>
+        <button class="k" data-mode="4" data-n="CW-L">CW-L</button>
+        <button class="k" data-mode="11" data-n="DATA-U">DATA-U</button>
+        <button class="k" data-mode="12" data-n="DATA-L">DATA-L</button>
+        <button class="k" data-mode="9" data-n="RTTY-L">RTTY</button>
+        <button class="k" data-mode="5" data-n="AM">AM</button>
+        <button class="k" data-mode="7" data-n="FM">FM</button>
+        <button class="k" data-mode="8" data-n="FM-N">FM-N</button>
+      </div>
+      <div class="lab">Sáv</div>
+      <div class="g g5" id="bands"></div>
+      <div class="lab">VFO</div>
+      <div class="g g4">
+        <button class="k" data-cmd="swap">A ⇄ B</button>
+        <button class="k" data-cmd="a2b">A → B</button>
+        <button class="k" data-cmd="b2a">B → A</button>
+        <button class="k" id="split">Split</button>
+      </div>
+      <div class="lab">Clarifier</div>
+      <div class="g g4">
+        <button class="k" id="clar">Be</button>
+        <button class="k" data-cmd="clarstep -10">−10 Hz</button>
+        <button class="k" data-cmd="clarstep 10">+10 Hz</button>
+        <button class="k" data-cmd="clarclr">Nullázás</button>
+      </div>
+    </section>
+    <section class="tab" id="t2" hidden>
+      <div class="lab">Áteresztősáv</div>
+      <svg class="pbv" id="pbv" viewBox="0 0 320 56" preserveAspectRatio="none" aria-hidden="true">
+        <rect id="pbr" y="8" height="40" fill="#efa63a44" stroke="#f6bb5a"/>
+        <line id="pbn" y1="0" y2="56" stroke="#d92f27" stroke-width="2" stroke-dasharray="4 3"/>
+        <line id="pbc" y1="0" y2="56" stroke="#8fc48a" stroke-width="2"/>
+      </svg>
+      <div class="lab">Szűrőszélesség</div>
+      <div class="sl"><span>Szélesség</span><input type="range" id="wsl" min="1" max="21" aria-label="Szűrőszélesség"><output id="wout"></output></div>
+      <div class="lab">Finomhangolás</div>
+      <div id="fpanel"></div>
+      <div class="lab">Zajcsökkentés</div>
+      <div class="g g3">
+        <button class="k" data-fn="0" id="fnNR">DNR</button>
+        <button class="k" data-fn="1" id="fnNB">Zajzár (NB)</button>
+        <button class="k" data-fn="2" id="fnNT">Auto notch</button>
+      </div>
+      <div id="slrx"></div>
+      <div class="lab">Bemenet</div>
+      <div class="g g3">
+        <button class="k" data-fn="4" id="fnATT">ATT</button>
+        <button class="k" data-fn="3" id="fnAMP">Előerősítő</button>
+        <button class="k" data-fn="6" id="fnLK">Tárcsazár</button>
+      </div>
+      <div class="lab">AGC</div>
+      <div class="g g5" id="agc">
+        <button class="k" data-agc="0">Ki</button><button class="k" data-agc="1">Gyors</button>
+        <button class="k" data-agc="2">Közép</button><button class="k" data-agc="3">Lassú</button>
+        <button class="k" data-agc="4">Auto</button>
+      </div>
+    </section>
+    <section class="tab" id="t3" hidden>
+      <div id="sllv"></div>
+      <div class="lab">Adás</div>
+      <div class="g g3"><button class="k" data-fn="5" id="fnPR">Processzor</button><button class="k" data-fn="7" id="fnEQ">Mikrofon-EQ</button></div>
+      <div class="lab">Mikrofon-EQ beállítása</div>
+      <div class="g g3" style="margin-bottom:8px"><button class="k" id="eqn">Normál</button><button class="k" id="eqp">Processzorral</button></div>
+      <svg class="pbv" id="eqc" viewBox="0 0 320 56" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="320" y1="37" y2="37" stroke="#ffffff33"/><polyline id="eql" fill="none" stroke="#f6bb5a" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
+      <div class="eqg" id="eqb"></div>
+      <div class="bar2" id="eqbar" style="position:static" hidden><span>Az EQ-változások még nincsenek a rádióban</span><button class="k" id="eqw">Írás a rádióba</button><button class="k" id="eqd">Elvetés</button></div>
+      <p class="hint">A görbe közelítő, a tényleges hangot adás közben hallgasd vissza.</p>
+    </section>
+    <section class="tab" id="t5" hidden>
+      <div class="lab">Profilok</div>
+      <div class="tools" id="profs"></div>
+      <div class="tools">
+        <input class="txt" id="pname" placeholder="Új profil neve" maxlength="40" autocomplete="off">
+        <button class="k" id="psave">Csoport mentése profilként</button>
+      </div>
+      <div id="pv"></div>
+      <div class="lab">Menük</div>
+      <div class="tools">
+        <input class="txt" id="msearch" type="search" placeholder="Keresés névben vagy leírásban" autocomplete="off">
+        <select class="txt" id="mgroup" aria-label="Csoport"></select>
+        <button class="k" id="msweep">Beolvasás</button>
+      </div>
+      <div id="mlist"></div>
+      <div class="bar2" id="mbar" hidden><span id="mcount"></span><button class="k" id="mreview">Áttekintés</button><button class="k" id="mdrop">Elvetés</button></div>
+      <div class="lab">Mentések</div>
+      <p class="hint">Minden írás előtt automatikusan mentés készül, az utolsó 20 marad meg.</p>
+      <div class="tools" id="backs"></div>
+    </section>
+    <section class="tab" id="t6" hidden>
+      <div class="tools">
+        <button class="k" id="memsweep">Beolvasás</button>
+        <button class="k" id="memcsv">CSV letöltése</button>
+        <label class="k" style="display:flex;align-items:center" tabindex="0">CSV betöltése<input type="file" id="memfile" accept=".csv,text/csv" hidden></label>
+        <button class="k" id="memall">Üresek mutatása</button>
+      </div>
+      <p class="hint">A rádió CAT-parancsaival csatornát törölni nem lehet, csak felülírni. A kihangsúlyozott sorok még nincsenek a rádióban.</p>
+      <div id="memw"></div>
+      <div class="bar2" id="membar" hidden><span id="memcount"></span><button class="k" id="memwrite">Írás a rádióba</button><button class="k" id="memdrop">Elvetés</button></div>
+    </section>
+    <section class="tab" id="t7" hidden>
+      <div class="tools">
+        <button class="k" id="ssw">Figyelés</button>
+        <span id="ssm" class="hint" style="margin:0"></span>
+      </div>
+      <canvas id="sc" width="320" height="256" aria-label="SSTV-kép"></canvas>
+      <div class="job" style="margin-top:6px"><i id="ssb"></i></div>
+      <div class="lab">Kézi indítás, ha az elejét nem fogta a program</div>
+      <div class="tools">
+        <select class="txt" id="ssmode" aria-label="SSTV-mód"></select>
+        <button class="k" id="ssgo">Indítás</button>
+        <button class="k" id="ssstop">Leállítás</button>
+      </div>
+      <p class="hint">Hallgasd az SSTV-frekvenciát, például a 14,230 MHz-et USB-n. A hangkártyát a Beállítás fülön választhatod ki. Adás közben a vétel leáll.</p>
+      <div class="lab">Mentett képek</div>
+      <div class="gal" id="ssg"></div>
+    </section>
+    <section class="tab" id="t4" hidden>
+      <div class="lab">Rádió</div>
+      <button class="k" id="pwr">Rádió kikapcsolása</button>
+      <div class="lab">Hangkártya</div>
+      <select class="txt" id="adev" aria-label="Hangkártya"><option value="">Nincs kiválasztva</option></select>
+      <p class="hint">Ez a vízesés, a hang és a mikrofon eszköze. Ha a PSK- vagy SSTV-program is használja, a dsnoop kezdetű eszközt válaszd.</p>
+      <p class="hint" id="httpsh"></p>
+      <div class="lab">PTT módja</div>
+      <div class="g g3" id="pttm">
+        <button class="k" data-m="0">CAT</button><button class="k" data-m="1">RTS</button><button class="k" data-m="2">DTR</button>
+      </div>
+      <p class="hint" id="ptthint"></p>
+      <div class="lab">PTT-teszt</div>
+      <button class="k" id="ptest">Teszt: 1 mp adás</button>
+      <p class="hint">A mikrofon hangját ez a verzió nem viszi át a gépről vagy a telefonról. Az adásgomb a rádió saját hangbemenetét kapcsolja adásba.</p>
+      <div class="lab">Külső programok</div>
+      <button class="k" id="mlock">Módzár</button>
+      <p class="hint">Bekapcsolva a külső programok (pl. WSJT-X) nem válthatnak módot. Innen továbbra is válthatsz.</p>
+      <div class="lab">Adásidő-korlát (másodperc)</div>
+      <div class="row"><input class="txt" id="txmax" type="number" min="10" max="900"><button class="k" id="txset">Mentés</button></div>
+      <div class="lab">Kapcsolat</div>
+      <dl class="info" id="info"></dl>
+      <div class="lab">A rádió menübeállításai</div>
+      <ul class="check" id="check"></ul>
+      <button class="k" id="mread" style="margin-top:8px">Menük újraolvasása</button>
+      <p class="hint">Ezeket a rádión állítsd át, a program most csak olvassa őket.</p>
+      <div class="lab">Napló</div>
+      <pre id="log"></pre>
+    </section>
+  </div>
+</div>
+<div class="ptt"><button id="ptt" disabled>Adás: tartsd nyomva</button></div>
+
+<dialog id="login">
+  <form id="loginf">
+    <h1>FT-891 vezérlő</h1>
+    <label for="pin">PIN-kód</label>
+    <input class="txt" id="pin" inputmode="numeric" autocomplete="off" required>
+    <p class="hint" id="pinmsg">A kódot a program indításkor kiírja a gép terminálablakába.</p>
+    <button class="k" type="submit">Belépés</button>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id), S={st:{}, ws:null, step:100, faLocal:0, faT:0};
+const Au={ctx:null,gain:null,rx:false,next:0,mic:false,live:false,mg:1,fix:""};
+const SEGS={a:"8,0 52,0 44,8 16,8",b:"54,3 54,47 46,43 46,10",c:"54,53 54,97 46,90 46,57",
+  d:"8,100 52,100 44,92 16,92",e:"6,53 6,97 14,90 14,57",f:"6,3 6,47 14,43 14,10",g:"9,50 16,46 44,46 51,50 44,54 16,54"};
+const MAP=["abcdef","bc","abdeg","abcdg","bcfg","acdfg","acdefg","abc","abcdefg","abcdfg"];
+const PLACES=[1e7,1e6,1e5,1e4,1e3,100,10,1];
+const WSSB=[0,200,400,600,850,1100,1350,1500,1650,1800,1950,2100,2200,2300,2400,2500,2600,2700,2800,2900,3000,3200];
+const WCW=[0,50,100,150,200,250,300,350,400,450,500,800,1200,1400,1700,2000,2400,3000];
+const BANDS=[[160,0,1.8,2],[80,1,3.5,4],[40,3,7,7.3],[30,4,10.1,10.15],[20,5,14,14.35],[17,6,18.068,18.168],[15,7,21,21.45],[12,8,24.89,24.99],[10,9,28,29.7],[6,10,50,54]];
+const send=t=>{if(S.ws&&S.ws.readyState===1)S.ws.send(t)};
+
+/* héttagú kijelző */
+const digs=[];
+(function(){
+  const box=$("freq");
+  PLACES.forEach((p,i)=>{
+    const b=document.createElement("button");
+    b.className="dig";b.setAttribute("aria-label",(p>=1e6?p/1e6+" MHz":p>=1e3?p/1e3+" kHz":p+" Hz")+" helyiérték: felső fele fel, alsó fele le");
+    b.innerHTML='<svg viewBox="0 0 60 100" aria-hidden="true">'+Object.entries(SEGS).map(([k,v])=>`<polygon class="seg" data-s="${k}" points="${v}"/>`).join("")+"</svg>";
+    b.addEventListener("click",e=>{const r=b.getBoundingClientRect();tune((e.clientY-r.top<r.height/2?1:-1)*p)});
+    b.addEventListener("wheel",e=>{e.preventDefault();tune((e.deltaY<0?1:-1)*p)},{passive:false});
+    b.addEventListener("keydown",e=>{if(e.key==="ArrowUp"){e.preventDefault();tune(p)}if(e.key==="ArrowDown"){e.preventDefault();tune(-p)}});
+    box.append(b);digs.push(b);
+    if(i===1||i===4){const d=document.createElement("span");d.className="dot";d.innerHTML="<i></i>";box.append(d)}
+  });
+})();
+function showFreq(f){
+  const s=String(Math.floor(f)).padStart(8,"0");let lead=true;
+  [...s].forEach((c,i)=>{if(c!=="0"||i>=1)lead=false;const on=lead?"":MAP[+c];
+    digs[i].querySelectorAll(".seg").forEach(p=>p.classList.toggle("on",on.includes(p.dataset.s)))});
+}
+const fmt=f=>{const s=String(f).padStart(7,"0");return s.replace(/(\d)(\d{3})(\d{3})$/,"$1.$2.$3")};
+
+/* hangolás */
+function curFa(){return Date.now()-S.faT<900?S.faLocal:(S.st.fa||0)}
+function tune(d){if(!S.st.connected)return;setFa(curFa()+d)}
+function setFa(f){f=Math.max(30000,Math.min(56000000,Math.round(f)));S.faLocal=f;S.faT=Date.now();showFreq(f);send("fa "+f)}
+function repeat(el,fn){let t;const stop=()=>{clearTimeout(t);clearInterval(t)};
+  el.addEventListener("pointerdown",()=>{fn();t=setTimeout(()=>{t=setInterval(fn,90)},350)});
+  ["pointerup","pointerleave","pointercancel"].forEach(n=>el.addEventListener(n,stop));
+  el.addEventListener("keydown",e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();fn()}})}
+repeat($("up"),()=>tune(S.step));repeat($("dn"),()=>tune(-S.step));
+(function(){const r=$("ribs");let x=null,pos=0,acc=0;
+  r.addEventListener("pointerdown",e=>{x=e.clientX;acc=0;r.setPointerCapture(e.pointerId)});
+  r.addEventListener("pointermove",e=>{if(x===null)return;const d=e.clientX-x;x=e.clientX;pos+=d;acc+=d;
+    r.style.backgroundPositionX=pos+"px";const n=Math.trunc(acc/9);if(n){acc-=n*9;tune(n*S.step)}});
+  ["pointerup","pointercancel"].forEach(n=>r.addEventListener(n,()=>{x=null}));
+  r.addEventListener("keydown",e=>{if(e.key==="ArrowRight"){e.preventDefault();tune(S.step)}if(e.key==="ArrowLeft"){e.preventDefault();tune(-S.step)}});
+  $("lcd").addEventListener("wheel",e=>{if(e.target.closest(".dig"))return;e.preventDefault();tune((e.deltaY<0?1:-1)*S.step)},{passive:false});
+})();
+function setStep(v){S.step=v;document.querySelectorAll("[data-step]").forEach(b=>b.classList.toggle("on",+b.dataset.step===v));try{localStorage.setItem("step",v)}catch(e){}}
+document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>setStep(+b.dataset.step));
+try{setStep(+localStorage.getItem("step")||100)}catch(e){setStep(100)}
+$("entry").onclick=()=>{const f=$("entryf");f.hidden=!f.hidden;if(!f.hidden)$("entryv").focus()};
+$("entryf").onsubmit=e=>{e.preventDefault();const v=parseFloat($("entryv").value.replace(",","."));
+  if(v>0){setFa(v*1e6);$("entryf").hidden=true;$("entryv").value=""}};
+
+/* sávok, gombok */
+BANDS.forEach(([m,c])=>{const b=document.createElement("button");b.className="k";b.textContent=m+" m";b.dataset.band=c;$("bands").append(b)});
+document.addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;const d=b.dataset;
+  if(d.mode)send("mode "+d.mode);else if(d.band)send("band "+d.band);else if(d.cmd)send(d.cmd);
+  else if(d.fn)send(`fn ${d.fn} ${b.classList.contains("on")?0:1}`);
+  else if(d.agc)send("agc "+d.agc);else if(d.m)send("pttm "+d.m);
+});
+$("split").onclick=()=>send("split "+(S.st.split?0:1));
+$("clar").onclick=()=>send("clar "+(S.st.clar?0:1));
+$("mlock").onclick=()=>send("modelock "+(S.st.mode_lock?0:1));
+$("mread").onclick=()=>send("menuread");
+$("txset").onclick=()=>send("txmax "+$("txmax").value);
+(function(){let armed=null;const b=$("ptest");b.onclick=()=>{
+  if(!armed){b.textContent="Biztos? A rádió 1 mp-re adásba kapcsol";armed=setTimeout(()=>{armed=null;b.textContent="Teszt: 1 mp adás"},4000);return}
+  clearTimeout(armed);armed=null;b.textContent="Teszt: 1 mp adás";send("ptttest")}})();
+
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
+  document.querySelectorAll(".tab").forEach(t=>t.hidden=t.id!==b.dataset.tab);
+  document.querySelector(".deck").classList.toggle("wide",["t5","t6","t7"].includes(b.dataset.tab));
+  send("sview "+(b.dataset.tab==="t7"?1:0));
+  S.tab=b.dataset.tab;tabOpened();
+  try{localStorage.setItem("tab",b.dataset.tab)}catch(e){}});
+
+/* csúszkák */
+const FT_BTN=[];
+const SL={};
+function slider(host,key,label,lvl,min,max,fmtv,step,pre){
+  const w=document.createElement("div");w.className="sl";const id="s_"+key;
+  w.innerHTML=`<label for="${id}">${label}</label><input type="range" id="${id}" min="${min}" max="${max}" step="${step||1}"><output></output>`;
+  $(host).append(w);const i=w.querySelector("input"),o=w.querySelector("output");let t=0;
+  SL[key]={i,o,fmtv,last:0};
+  i.addEventListener("input",()=>{SL[key].last=Date.now();o.textContent=fmtv?fmtv(i.value):i.value;
+    clearTimeout(t);t=setTimeout(()=>send(`${pre||"lvl "+lvl} ${i.value}`),70)});
+}
+[["ifs","IF shift","ifs_on",0,1,-1200,1200,20],["notch_hz","Notch","notch_on",2,3,10,3200,10],["cont","Contour","cont_on",4,5,10,3200,10],["apf","APF","apf_on",6,7,-250,250,10]].forEach(([k,t,on,fo,fv,a,b,st])=>{
+  const r=document.createElement("div");r.className="fr";r.innerHTML=`<button class="k" id="b_${k}">${t}</button><div id="h_${k}"></div>`;$("fpanel").append(r);
+  slider("h_"+k,k,t,0,a,b,v=>v+" Hz",st,"filt "+fv);
+  const btn=$("b_"+k);btn.onclick=()=>send(`filt ${fo} ${S.st[on]?0:1}`);FT_BTN.push([btn,on]);
+});
+slider("slrx","nrl","DNR-szint",5,1,15);
+slider("slrx","nbl","NB-szint",6,0,10);
+slider("sllv","af","Hangerő",0,0,255);
+slider("sllv","rf","RF-erősítés",1,0,30);
+slider("sllv","sql","Zajzár",2,0,100);
+slider("sllv","pwr","Teljesítmény",3,5,100,v=>v+" W");
+slider("sllv","mic","Mikrofon",4,0,100);
+slider("sllv","procl","Processzor",7,0,100);
+(function(){const w=$("wsl");let t=0;w.addEventListener("input",()=>{S.wT=Date.now();$("wout").textContent=wTable()[w.value]+" Hz";
+  clearTimeout(t);t=setTimeout(()=>send("width "+w.value),120)})})();
+const fam=()=>"12".includes(S.st.md)?1:"3769C8".includes(S.st.md)&&S.st.md?2:0;
+const wTable=()=>fam()===1?WSSB:WCW;
+
+/* PTT: amíg nyomod, 400 ms-onként megerősíti; ha elmarad, a gép elengedi */
+(function(){const b=$("ptt");let t=null;
+  const on=()=>{if(t||b.disabled)return;if(Au.mic)send("txa 1");Au.live=true;send("ptt 1");t=setInterval(()=>send("ptt 1"),400);b.classList.add("live");b.textContent="Adás"};
+  const off=()=>{if(!t)return;clearInterval(t);t=null;Au.live=false;send("ptt 0");if(Au.mic)send("txa 0");b.classList.remove("live");b.textContent="Adás: tartsd nyomva"};
+  b.addEventListener("pointerdown",e=>{e.preventDefault();b.setPointerCapture(e.pointerId);on()});
+  ["pointerup","pointercancel","lostpointercapture"].forEach(n=>b.addEventListener(n,off));
+  b.addEventListener("keydown",e=>{if(e.key===" "&&!e.repeat){e.preventDefault();on()}});
+  b.addEventListener("keyup",e=>{if(e.key===" ")off()});
+  b.addEventListener("blur",off);b.addEventListener("contextmenu",e=>e.preventDefault());
+  window.addEventListener("blur",off);window.addEventListener("pagehide",off);
+  document.addEventListener("visibilitychange",()=>{if(document.hidden)off()});
+  S.pttOff=off;
+})();
+
+/* menüellenőrzés */
+const MENUS={
+ "0506":["05-06 CAT RATE",["4800","9600","19200","38400"]],
+ "0507":["05-07 CAT TOT",["10 ms","100 ms","1000 ms","3000 ms"],(v)=>v==="0"?"Állítsd legalább 100 ms-ra, a 10 ms megszakítást okozhat.":""],
+ "0508":["05-08 CAT RTS",["Tiltva","Engedélyezve"],(v,s)=>v==="1"&&!s.rts_on?"A port azonosítatlan, RTS nélkül használom. Állítsd DISABLE-re.":""],
+ "0801":["08-01 DATA MODE",["PSK","OTHERS"]],
+ "0809":["08-09 DATA IN SELECT",["MIC","REAR"],v=>v==="0"?"Digitális módokhoz REAR kell, ha hátul jön a hang.":""],
+ "0810":["08-10 DATA PTT SELECT",["DAKY","RTS","DTR"],(v,s)=>s.ptt_method&&+v!==s.ptt_method?"Ez nem egyezik a kiválasztott PTT-móddal, így DATA módban nem lesz adás.":""],
+ "0812":["08-12 DATA BFO",["USB","LSB"]],
+ "1105":["11-05 SSB MIC SELECT",["MIC","REAR"]],
+ "1107":["11-07 SSB BFO",["USB","LSB","Automatikus"]],
+ "1108":["11-08 SSB PTT SELECT",["DAKY","RTS","DTR"],(v,s)=>s.ptt_method&&+v!==s.ptt_method?"Ez nem egyezik a kiválasztott PTT-móddal, így SSB-ben nem lesz adás.":""],
+ "0707":["07-07 CW BFO",["USB","LSB","Automatikus"]]};
+function render(s){
+  S.st=s;const c=!!s.connected,tx=s.keyed||s.tx;
+  $("lcd").classList.toggle("off",!c);
+  if(Date.now()-S.faT>=900)showFreq(s.fa||0);
+  $("mode").textContent=c?s.mode:"Nincs rádió";
+  $("width").textContent=c?(s.width_hz/1000).toFixed(s.width_hz%100?2:1).replace(".",",")+" kHz":"";
+  $("fb").textContent=c?fmt(s.fb):"--";
+  $("chan").textContent=c&&s.mem_mode?"Memória "+s.channel:"";
+  $("fsplit").hidden=!s.split;$("fclar").hidden=!s.clar;$("fclar").textContent="Clar "+(s.clar_ofs>0?"+":"")+s.clar_ofs;
+  $("flock").hidden=!s.lock;$("ftx").hidden=!tx;
+  $("mrx").hidden=!!tx;$("mtx").hidden=!tx;
+  $("sbar").style.width=(s.sm/255*100)+"%";
+  $("pbar").style.width=(s.po/255*100)+"%";$("wbar").style.width=(s.swr/255*100)+"%";$("abar").style.width=(s.alc/255*100)+"%";
+  const ssb="12".includes(s.md)&&s.md;
+  $("mLSB").classList.toggle("on",s.mode==="LSB");$("mUSB").classList.toggle("on",s.mode==="USB");
+  $("mAuto").classList.toggle("on",!!ssb&&s.bfo_ssb===2);$("mAuto").disabled=!s.menu_ok;
+  document.querySelectorAll("#modes .k").forEach(b=>b.classList.toggle("on",b.dataset.n===s.mode||(b.dataset.n==="RTTY-L"&&s.mode.startsWith("RTTY"))));
+  document.querySelectorAll("#bands .k").forEach((b,i)=>{const[,,lo,hi]=BANDS[i];b.classList.toggle("on",s.fa>=lo*1e6&&s.fa<=hi*1e6)});
+  FT_BTN.forEach(([b,k])=>b.classList.toggle("on",!!s[k]));
+  $("b_apf").disabled=!"37".includes(s.md||"x");
+  renderPass(s);
+  const wm=$("wfmsg");wm.hidden=!S.wf||!s.wf_status;wm.textContent=s.wf_status||"";
+  if(document.activeElement!==$("adev")&&s.wf_dev!==undefined)$("adev").value=s.wf_dev;
+  $("split").classList.toggle("on",!!s.split);$("clar").classList.toggle("on",!!s.clar);
+  [["fnNR",s.nr],["fnNB",s.nb],["fnNT",s.notch],["fnATT",s.att],["fnAMP",s.amp],["fnLK",s.lock],["fnPR",s.proc],["fnEQ",s.eq]].forEach(([i,v])=>$(i).classList.toggle("on",!!v));
+  document.querySelectorAll("#agc .k").forEach(b=>b.classList.toggle("on",+b.dataset.agc===Math.min(s.agc,4)));
+  for(const k in SL){const o=SL[k];if(Date.now()-o.last>1200){o.i.value=s[k];o.o.textContent=o.fmtv?o.fmtv(s[k]):s[k]}}
+  const w=$("wsl"),tb=wTable(),f=fam();w.disabled=!f;w.max=tb.length-1;
+  if(!(Date.now()-(S.wT||0)<1200)){w.value=s.width_idx||1;$("wout").textContent=f?s.width_hz+" Hz":"–"}
+  document.querySelectorAll("#pttm .k").forEach(b=>b.classList.toggle("on",+b.dataset.m===s.ptt_method));
+  $("ptthint").textContent=s.ptt_method?(s.ptt_port?"Port: "+s.ptt_port:"A PTT-port nincs megnyitva."):"A PTT a CAT-porton megy. Ha adás közben leesik, próbáld az RTS módot.";
+  $("mlock").classList.toggle("on",!!s.mode_lock);$("mlock").textContent=s.mode_lock?"Módzár bekapcsolva":"Módzár kikapcsolva";
+  if(document.activeElement!==$("txmax"))$("txmax").value=s.tx_max;
+  const p=$("ptt");p.disabled=!c;
+  renderSstv(s);renderMic(s);$("pwrq").hidden=c;$("pwr").textContent=c?"Rádió kikapcsolása":"Rádió bekapcsolása";
+  $("httpsh").textContent=s.tls_port&&location.protocol==="http:"?`Telefon mikrofonjához ezt a címet nyisd meg: https://${location.hostname}:${s.tls_port}`:"";
+  $("jobw").hidden=!s.job_n;
+  if(s.job_n){$("jobt").textContent=`${s.job}: ${s.job_i} / ${s.job_n}`;$("jobb").style.width=(s.job_i/s.job_n*100)+"%"}
+  if(s.data_seq!==S.dSeq){S.dSeq=s.data_seq;tabOpened()}
+  $("info").innerHTML="";[["Állapot",s.status],["Port",s.port||"–"],["Sebesség",s.baud?s.baud+" baud":"–"],
+    ["Firmware",s.fw_main?`fő ${s.fw_main}, DSP ${s.fw_dsp}, LCD ${s.fw_lcd}`:"–"],
+    ["Menütábla",s.menu_ok?"egyezik a CAT-könyvvel":"eltér vagy nem ismert"],
+    ["Adatforgalom",`${s.frames} válasz, ${s.timeouts} időtúllépés, ${s.drops} PTT-esés`]].forEach(([k,v])=>{
+      const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=k;dd.textContent=v;$("info").append(dt,dd)});
+  const ul=$("check");ul.innerHTML="";Object.keys(s.menu||{}).sort().forEach(id=>{
+    const m=MENUS[id];if(!m)return;const v=s.menu[id],li=document.createElement("li");
+    const b=document.createElement("b");b.textContent=m[0];li.append(b,": "+(m[1][+v]??v));
+    const h=m[2]&&m[2](v,s);if(h){const sm=document.createElement("small");sm.textContent=h;li.append(sm)}
+    ul.append(li)});
+  if(s.notice_seq!==S.nSeq){if(S.nSeq!==undefined&&s.notice_seq)note(s.notice,s.notice_bad);S.nSeq=s.notice_seq}
+  if(!c&&s.status)$("notice").textContent=s.status;
+  else if($("notice").textContent===S.lastStatus)$("notice").textContent="";
+  if(!c)S.lastStatus=s.status;
+}
+function note(t,bad){const n=$("notice");n.textContent=t;n.classList.toggle("bad",!!bad);clearTimeout(S.nT);S.nT=setTimeout(()=>{n.textContent=""},bad?12000:6000)}
+
+/* --- menük és profilok --- */
+const M={defs:[],vals:{},edit:{},read:false,profs:[],backs:[]};
+const defOf=id=>M.defs.find(d=>d.id===id);
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function label(d,v){
+  if(v===undefined||v==="")return "–";
+  if(d.k===0)return d.labels.split("|")[+v-d.min]??v;
+  if(d.k===3)return +v?(d.min+(+v-1)*d.step)+" "+d.unit:"Ki";
+  return (+v)+(d.unit?" "+d.unit:"");
+}
+function raw(d,num,cur){
+  const len=(cur||"").length||d.d;
+  if(d.k===2)return (num<0?"-":"+")+String(Math.abs(num)).padStart(len-1,"0");
+  return String(num).padStart(len,"0");
+}
+async function api(u,body){
+  const r=await fetch(u,body===undefined?{}:{method:"POST",body});
+  if(r.headers.get("Content-Type")!=="application/json")throw new Error("Nincs jogosultság");
+  return r.json();
+}
+async function postMsg(u,body){try{const j=await api(u,body);if(j.ok===false)note(j.msg||"A művelet nem sikerült.",1);return j.ok!==false}catch(e){note(e.message,1);return false}}
+async function tabOpened(){
+  try{
+    if(S.tab==="t5"){const[m,p,b]=await Promise.all([api("/api/menus"),api("/api/profiles"),api("/api/backups")]);
+      M.defs=m.defs;M.vals=m.vals;M.read=m.read;M.profs=p;M.backs=b;
+      if(!M.read&&S.st.connected&&S.st.menu_ok&&!S.st.job_n&&!S.asked){S.asked=1;send("menusweep")}
+      renderMenus()}
+    if(S.tab==="t3"){const m=await api("/api/menus");M.defs=m.defs;M.vals=m.vals;M.read=m.read;
+      if(!M.read&&S.st.connected&&S.st.menu_ok&&!S.st.job_n&&!S.asked){S.asked=1;send("menusweep")}renderEq()}
+    if(S.tab==="t4"){const l=await api("/api/audio"),sel=$("adev"),cur=S.st.wf_dev||"";
+      sel.innerHTML='<option value="">Nincs kiválasztva</option>'+l.map(d=>`<option value="${esc(d.name)}">${esc(d.desc+" ("+d.name+")")}</option>`).join("");sel.value=cur}
+    if(S.tab==="t7"){const l=await api("/api/sstv"),m=$("ssmode");
+      if(!m.options.length)m.innerHTML=l.modes.map((n,i)=>`<option value="${i}">${esc(n)}</option>`).join("");
+      if(!m.dataset.init){m.dataset.init="1";m.value=l.modes.indexOf("Scottie 2")}
+      $("ssg").innerHTML=l.images.length?l.images.map(n=>{const u="/api/sstv-img?name="+encodeURIComponent(n),t=n.replace(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)\d\d-(.*)\.png$/,"$1.$2.$3. $4:$5 $6").replace(/_/g," ");
+        return `<a href="${u}" download="${esc(n)}"><img loading="lazy" src="${u}" alt="${esc(t)}">${esc(t)}</a>`}).join(""):'<p class="hint">Még nincs mentett kép.</p>'}
+    if(S.tab==="t6"){const m=await api("/api/mem");Mem.rows=m.rows;Mem.read=m.read;
+      if(!m.read&&S.st.connected&&!S.st.job_n&&!S.askedM){S.askedM=1;send("memread")}renderMem()}
+  }catch(e){}
+}
+function renderMenus(){
+  const g=$("mgroup"),cur=g.value,gs=[...new Set(M.defs.map(d=>d.grp))];
+  g.innerHTML='<option value="">Minden csoport</option>'+gs.map(x=>`<option>${esc(x)}</option>`).join("");g.value=cur;
+  const q=$("msearch").value.toLowerCase();
+  const L=$("mlist");L.innerHTML="";
+  M.defs.filter(d=>d.prot!==2&&(M.vals[d.id]!==undefined||!M.read)&&(!g.value||d.grp===g.value)&&(!q||(d.name+" "+d.hu+" "+d.id).toLowerCase().includes(q))).forEach(d=>{
+    const w=document.createElement("div"),cv=M.vals[d.id],ev=M.edit[d.id]??cv;
+    w.className="mi"+(M.edit[d.id]!==undefined?" ch":"");
+    w.innerHTML=`<div><b>${d.id.slice(0,2)}-${d.id.slice(2)} ${esc(d.name)}</b><small>${esc(d.hu)}</small></div>`;
+    if(d.prot||cv===undefined){const s=document.createElement("div");s.className="prot";s.textContent=label(d,cv);w.append(s)}
+    else if(d.k===0||d.k===3){const s=document.createElement("select");s.className="txt";s.setAttribute("aria-label",d.name);
+      const n=d.k===0?d.max-d.min+1:d.max+1;
+      for(let i=0;i<n;i++){const x=d.k===0?d.min+i:i,o=document.createElement("option");o.value=raw(d,x,cv);o.textContent=label(d,o.value);s.append(o)}
+      s.value=ev;s.onchange=()=>setEdit(d,s.value);w.append(s)}
+    else{const i=document.createElement("input");i.className="txt";i.type="number";i.min=d.min;i.max=d.max;i.step=d.step;i.value=+ev;i.setAttribute("aria-label",d.name);
+      i.onchange=()=>{const v=Math.max(d.min,Math.min(d.max,Math.round(+i.value)));i.value=v;setEdit(d,raw(d,v,cv))};w.append(i)}
+    L.append(w)});
+  if(!L.children.length)L.innerHTML='<p class="hint">Nincs találat.</p>';
+  updBar();renderSets();
+}
+function setEdit(d,v){if(v===M.vals[d.id])delete M.edit[d.id];else M.edit[d.id]=v;renderMenus()}
+function updBar(){const n=Object.keys(M.edit).length;$("mbar").hidden=!n||!!$("pv").firstChild;$("mcount").textContent=n+" változás nincs még a rádióban"}
+function renderSets(){
+  const P=$("profs");P.innerHTML="";M.profs.forEach(x=>{const b=document.createElement("button");b.className="k";b.textContent=x.name;b.onclick=()=>preview("profile",x);P.append(b)});
+  const B=$("backs");B.innerHTML="";M.backs.slice(0,6).forEach(x=>{const b=document.createElement("button");b.className="k";
+    b.textContent=x.name.replace(/^menu-(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)\d\d$/,"$1.$2.$3. $4:$5");b.onclick=()=>preview("backup",x);B.append(b)});
+  if(!M.backs.length)B.innerHTML='<p class="hint">Még nincs mentés.</p>';
+}
+function diffs(items){
+  const out=[];for(const id in items){const d=defOf(id);if(!d||d.prot||M.vals[id]===undefined||items[id]===M.vals[id])continue;out.push([d,M.vals[id],items[id]])}return out;
+}
+function showPv(title,lines,okText,onOk,extra){
+  const p=$("pv");p.innerHTML=`<div class="pv"><h2>${esc(title)}</h2>${lines.length?"<ul>"+lines.map(l=>`<li>${esc(l)}</li>`).join("")+"</ul>":'<p class="hint">Minden már így áll a rádión.</p>'}<div class="tools"><button class="k" id="pvok">${esc(okText)}</button><button class="k" id="pvno">Mégse</button></div></div>`;
+  updBar();
+  $("pvok").onclick=()=>{p.innerHTML="";updBar();onOk()};$("pvno").onclick=()=>{p.innerHTML="";updBar()};
+  if(extra){const b=document.createElement("button");b.className="k";b.textContent=extra[0];b.onclick=()=>{p.innerHTML="";updBar();extra[1]()};p.querySelector(".tools").append(b)}
+  p.scrollIntoView({block:"nearest"});
+}
+function preview(type,x){
+  const ls=diffs(x.items).map(([d,a,b])=>`${d.name}: ${label(d,a)} → ${label(d,b)}`);
+  if(type==="profile"&&x.items.mode!==undefined)ls.push("Mód: "+(MODE_ENUM[x.items.mode]||x.items.mode));
+  showPv(type==="profile"?"Profil: "+x.name:"Mentés visszaállítása",ls,type==="profile"?"Alkalmazás":"Visszaállítás",
+    ()=>postMsg(`/api/apply?type=${type}&name=${encodeURIComponent(x.name)}`,""),
+    type==="profile"?["Profil törlése",async()=>{await postMsg("/api/profile-del?name="+encodeURIComponent(x.name),"");tabOpened()}]:null);
+}
+const MODE_ENUM={0:"LSB",1:"USB",2:"Automatikus oldalsáv",3:"CW",4:"CW-L",5:"AM",6:"AM-N",7:"FM",8:"FM-N",9:"RTTY",10:"RTTY-U",11:"DATA-U",12:"DATA-L"};
+$("msearch").oninput=renderMenus;$("mgroup").onchange=renderMenus;
+$("msweep").onclick=()=>send("menusweep");
+$("mdrop").onclick=()=>{M.edit={};renderMenus()};
+$("mreview").onclick=()=>{
+  const ls=Object.keys(M.edit).map(id=>{const d=defOf(id);return `${d.name}: ${label(d,M.vals[id])} → ${label(d,M.edit[id])}`});
+  showPv("Írás a rádióba",ls,"Írás a rádióba",async()=>{const body=Object.entries(M.edit).map(([i,v])=>i+"="+v).join("\n");
+    if(await postMsg("/api/write",body)){M.edit={};renderMenus()}})};
+$("psave").onclick=async()=>{
+  const n=$("pname").value.trim();if(!n){note("Adj nevet a profilnak.",1);return}
+  const g=$("mgroup").value;const body=M.defs.filter(d=>!d.prot&&M.vals[d.id]!==undefined&&(!g||d.grp===g)).map(d=>d.id+"="+(M.edit[d.id]??M.vals[d.id])).join("\n");
+  if(await postMsg("/api/profile?name="+encodeURIComponent(n),body)){$("pname").value="";note("Profil mentve: "+n);tabOpened()}};
+
+/* --- memóriák --- */
+const Mem={rows:[],edit:{},all:false,read:false};
+const MDN={1:"LSB",2:"USB",3:"CW",7:"CW-R",4:"FM",B:"FM-N",5:"AM",D:"AM-N",6:"RTTY-L",9:"RTTY-U",8:"DATA-L",C:"DATA-U"};
+const rowOf=c=>Mem.edit[c]||Mem.rows.find(r=>r.ch===c);
+function mFreq(f){return f?(f/1e6).toFixed(6).replace(/\.?0+$/,""):""}
+function renderMem(){
+  const w=$("memw");w.innerHTML='<div class="mrow head"><span>Csat.</span><span>Frekvencia, MHz</span><span>Mód</span><span>Név</span><span>Eltolás</span><span></span></div>';
+  const list=Mem.rows.filter(r=>Mem.all||r.on||Mem.edit[r.ch]);
+  list.forEach((o,i)=>{
+    const r=Mem.edit[o.ch]||o,d=document.createElement("div");d.className="mrow"+(Mem.edit[o.ch]?" ch":"");
+    d.innerHTML=`<b>${esc(o.ch)}</b><input class="txt" aria-label="Frekvencia" inputmode="decimal" value="${mFreq(r.f)}" placeholder="üres">
+    <select class="txt" aria-label="Mód">${Object.entries(MDN).map(([k,v])=>`<option value="${k}"${(r.md||"2")===k?" selected":""}>${v}</option>`).join("")}</select>
+    <input class="txt nm" aria-label="Név" maxlength="12" value="${esc(r.tag||"")}">
+    <select class="txt" aria-label="Eltolás"><option value="0">Szimplex</option><option value="1">+</option><option value="2">−</option></select>
+    <button class="k">Előhívás</button>`;
+    const[fi,ms,ti,ss,rb]=[d.children[1],d.children[2],d.children[3],d.children[4],d.children[5]];
+    ss.value=r.shift||0;rb.disabled=!o.on;
+    rb.onclick=()=>send("memrecall "+Mem.rows.indexOf(o));
+    const upd=()=>{const f=Math.round(parseFloat(fi.value.replace(",","."))*1e6);
+      if(!(f>0)){delete Mem.edit[o.ch];renderMem();return}
+      const n={...o,on:1,f,md:ms.value,tag:ti.value,shift:+ss.value,clar:o.clar||0,ofs:o.ofs||0,tone:o.tone||0};
+      if(o.on&&n.f===o.f&&n.md===o.md&&n.tag===o.tag&&n.shift===o.shift)delete Mem.edit[o.ch];else Mem.edit[o.ch]=n;renderMem()};
+    fi.onchange=upd;ms.onchange=upd;ti.onchange=upd;ss.onchange=upd;w.append(d)});
+  if(!list.length)w.insertAdjacentHTML("beforeend",`<p class="hint">${Mem.read?"Nincs tárolt csatorna. Az Üresek mutatása gombbal vehetsz fel újat.":"Nincs még beolvasva."}</p>`);
+  const n=Object.keys(Mem.edit).length;$("membar").hidden=!n;$("memcount").textContent=n+" csatorna nincs még a rádióban";
+  $("memall").textContent=Mem.all?"Üresek elrejtése":"Üresek mutatása";
+}
+$("memsweep").onclick=()=>send("memread");
+$("memall").onclick=()=>{Mem.all=!Mem.all;renderMem()};
+$("memdrop").onclick=()=>{Mem.edit={};renderMem()};
+$("memwrite").onclick=async()=>{
+  const body=Object.values(Mem.edit).map(r=>[r.ch,r.f,r.md,r.clar?1:0,r.ofs||0,r.tone||0,r.shift||0,r.tag||""].join("|")).join("\n");
+  if(await postMsg("/api/mem-write",body)){Mem.edit={};renderMem()}};
+$("memcsv").onclick=()=>{
+  const q=v=>/[",;\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+  const lines=["csatorna,frekvencia_hz,mod,nev,eltolas,clar_be,clar_hz,hang"];
+  Mem.rows.forEach(o=>{const r=rowOf(o.ch);if(r.on)lines.push([r.ch,r.f,MDN[r.md]||r.md,q(r.tag||""),r.shift||0,r.clar||0,r.ofs||0,r.tone||0].join(","))});
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([lines.join("\n")+"\n"],{type:"text/csv"}));
+  a.download="ft891-memoriak.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
+function csvRows(t){
+  const sep=t.split("\n")[0].includes(";")?";":",",rows=[];let row=[],f="",q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;else if(c===sep){row.push(f);f=""}
+    else if(c==="\n"){row.push(f);rows.push(row);row=[];f=""}else if(c!=="\r")f+=c}
+  if(f||row.length){row.push(f);rows.push(row)}return rows;
+}
+$("memfile").onchange=async e=>{
+  const file=e.target.files[0];if(!file)return;const rows=csvRows((await file.text()).replace(/^\uFEFF/,""));e.target.value="";
+  const h=(rows.shift()||[]).map(x=>x.trim().toLowerCase()),ix=n=>h.indexOf(n);
+  if(ix("csatorna")<0||ix("frekvencia_hz")<0){note("A CSV első sora ez legyen: csatorna, frekvencia_hz, mod, nev.",1);return}
+  const byName=Object.fromEntries(Object.entries(MDN).map(([k,v])=>[v,k]));let n=0,bad=0;
+  rows.forEach(c=>{const o=Mem.rows.find(r=>r.ch===(c[ix("csatorna")]||"").trim().padStart(3,"0")),f=+c[ix("frekvencia_hz")],md=byName[(c[ix("mod")]||"").trim().toUpperCase()];
+    if(!o||!(f>=30000&&f<=56000000)||!md){bad++;return}
+    const get=(k,d)=>ix(k)>=0?c[ix(k)]:d;
+    Mem.edit[o.ch]={...o,on:1,f,md,tag:(get("nev","")||"").slice(0,12),shift:+get("eltolas",0)||0,clar:+get("clar_be",0)||0,ofs:+get("clar_hz",0)||0,tone:+get("hang",0)||0};n++});
+  Mem.all=false;renderMem();note(`${n} csatorna betöltve${bad?`, ${bad} sor hibás`:""}. Az Írás a rádióba gombbal kerül át.`,bad)};
+
+/* --- hang --- */
+const MU=(()=>{const t=new Float32Array(256);for(let i=0;i<256;i++){const u=~i&255,e=(u>>4)&7,m=u&15,x=(((m<<3)+132)<<e)-132;t[i]=(u&128?-x:x)/32768}return t})();
+function muEnc(x){let s=Math.max(-32635,Math.min(32635,x*32767|0)),g=0;if(s<0){s=-s;g=128}s+=132;let e=7;for(let m=16384;!(s&m)&&e>0;e--,m>>=1);return ~(g|(e<<4)|((s>>(e+3))&15))&255}
+function rxPlay(d){
+  if(!Au.ctx||!Au.rx)return;const c=Au.ctx,b=c.createBuffer(1,d.length,8000),o=b.getChannelData(0);
+  for(let i=0;i<d.length;i++)o[i]=MU[d[i]];
+  const now=c.currentTime;if(Au.next<now+.05||Au.next>now+.9)Au.next=now+.25;
+  const n=c.createBufferSource();n.buffer=b;n.connect(Au.gain);n.start(Au.next);Au.next+=b.duration;
+}
+async function rxToggle(){
+  Au.rx=!Au.rx;$("rxb").classList.toggle("on",Au.rx);$("volw").hidden=!Au.rx;
+  if(Au.rx){
+    if(!S.st.wf_dev)await pickDev();
+    if(!Au.ctx){const C=window.AudioContext||window.webkitAudioContext;Au.ctx=new C();Au.gain=Au.ctx.createGain();Au.gain.connect(Au.ctx.destination)}
+    await Au.ctx.resume();Au.gain.gain.value=$("vol").value/100}
+  send("rx "+(Au.rx?1:0));
+}
+$("rxb").onclick=rxToggle;
+$("vol").oninput=e=>{$("volo").textContent=e.target.value+"%";if(Au.gain)Au.gain.gain.value=e.target.value/100};
+$("micg").oninput=e=>{$("mico").textContent=e.target.value+"%";Au.mg=e.target.value/100};
+async function micToggle(){
+  if(Au.mic){Au.mic=false;Au.st.getTracks().forEach(t=>t.stop());Au.proc.disconnect();Au.mc.close();$("micb").classList.remove("on");$("micw").hidden=$("micm").hidden=true;renderMic(S.st);return}
+  if(!window.isSecureContext||!navigator.mediaDevices){
+    const p=S.st.tls_port;note(p?`A mikrofonhoz a titkosított címet nyisd meg: https://${location.hostname}:${p}`:"A böngésző csak titkosított kapcsolaton adja ki a mikrofont, és a program HTTPS nélkül készült.",1);return}
+  try{Au.st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}})}
+  catch(e){note("A böngésző nem adta ki a mikrofont. Engedélyezd a webhely beállításaiban.",1);return}
+  if(!S.st.wf_dev)await pickDev();
+  const C=window.AudioContext||window.webkitAudioContext,c=Au.mc=new C(),src=c.createMediaStreamSource(Au.st),pr=Au.proc=c.createScriptProcessor(2048,1,1),z=c.createGain();
+  z.gain.value=0;src.connect(pr);pr.connect(z);z.connect(c.destination);
+  const ratio=c.sampleRate/8000;let acc=0,cnt=0,pos=0;const out=new Uint8Array(320);let on=0,lvl=0;
+  pr.onaudioprocess=e=>{const d=e.inputBuffer.getChannelData(0);let pk=0;
+    for(let i=0;i<d.length;i++){const v=d[i]*Au.mg;acc+=v;cnt++;pk=Math.max(pk,Math.abs(v));
+      if(++pos>=ratio){pos-=ratio;const y=acc/cnt;acc=0;cnt=0;
+        out[on++]=muEnc(y);if(on===320){on=0;if(Au.live&&S.ws&&S.ws.readyState===1)S.ws.send(out)}}}
+    lvl=Math.max(pk,lvl*.8);$("micl").style.width=Math.min(100,lvl*100)+"%"};
+  await c.resume();Au.mic=true;$("micb").classList.add("on");$("micw").hidden=$("micm").hidden=false;renderMic(S.st);
+}
+$("micb").onclick=micToggle;
+function renderMic(s){
+  const fam1="12".includes(s.md||"x"),fam4="8C".includes(s.md||"x"),id=fam1?"1105":fam4?"0809":"",v=id&&s.menu?s.menu[id]:undefined,h=$("mich"),f=$("micf");
+  let t="",b="",w="";
+  if(Au.mic&&id&&v==="0"){t="A rádió most a saját mikrofonját használja, a gép hangja nem megy ki.";b="Hátsó bemenetre váltás";w=id+"=1"}
+  else if(!Au.mic&&fam1&&v==="1"){t="SSB-ben a hátsó bemenet él, ezért a rádió kézi mikrofonja nem megy.";b="Vissza a kézi mikrofonra";w="1105=0"}
+  h.hidden=!t;h.textContent=t;f.hidden=!b;$("micfb").textContent=b;Au.fix=w;
+}
+$("micfb").onclick=()=>{if(Au.fix)postMsg("/api/write",Au.fix)};
+(function(){let armed=null;function hit(b){const on=S.st.connected;
+    if(on&&!armed){b.textContent="Biztos? Kikapcsolom a rádiót";armed=setTimeout(()=>{armed=null;b.textContent="Rádió kikapcsolása"},4000);return}
+    clearTimeout(armed);armed=null;send("power "+(on?0:1));b.textContent=on?"Rádió bekapcsolása":"Rádió kikapcsolása"}
+  $("pwr").onclick=()=>hit($("pwr"));$("pwrqb").onclick=()=>hit($("pwrqb"));})();
+
+/* --- SSTV --- */
+const Sv={ctx:$("sc").getContext("2d"),id:-1};
+function ssLine(a){
+  const id=a[0]<<8|a[1],ln=a[2]<<8|a[3],s=S.st.sstv||{},w=(a.length-4)/3,c=$("sc");
+  if(id!==Sv.id){Sv.id=id;if(s.w){c.width=w;c.height=s.h}Sv.ctx.fillStyle="#272b2f";Sv.ctx.fillRect(0,0,c.width,c.height);Sv.row=Sv.ctx.createImageData(w,1)}
+  if(!Sv.row||Sv.row.width!==w)Sv.row=Sv.ctx.createImageData(w,1);
+  const d=Sv.row.data;for(let i=0;i<w;i++){d[i*4]=a[4+i*3];d[i*4+1]=a[5+i*3];d[i*4+2]=a[6+i*3];d[i*4+3]=255}
+  Sv.ctx.putImageData(Sv.row,0,ln);
+}
+$("ssw").onclick=async()=>{const on=!(S.st.sstv&&S.st.sstv.on);if(on&&!S.st.wf_dev)await pickDev();send("sstv "+(on?1:0))};
+$("ssgo").onclick=async()=>{if(!S.st.wf_dev)await pickDev();send("sstv 1");send("sstvgo "+$("ssmode").value)};
+$("ssstop").onclick=()=>send("sstvstop");
+function renderSstv(s){
+  const v=s.sstv||{};$("ssw").classList.toggle("on",!!v.on);$("ssw").textContent=v.on?"Figyelés bekapcsolva":"Figyelés kikapcsolva";
+  let t=v.msg||"";if(v.active)t=`${v.mode}: ${v.line} / ${v.h} sor`;else if(v.mode&&v.msg)t=`${v.mode}: ${v.msg}`;
+  if(s.wf_status)t=s.wf_status;$("ssm").textContent=t;$("ssb").style.width=(v.h?v.line/v.h*100:0)+"%";
+}
+
+/* --- vízesés --- */
+const LUT=(()=>{const l=[];for(let i=0;i<256;i++){const t=i/255,a=[39,43,47],b=[239,166,58],c=[255,246,222];
+  const u=t<.6?t/.6:(t-.6)/.4,p=t<.6?a:b,q=t<.6?b:c;l.push(p.map((x,j)=>Math.round(x+(q[j]-x)*u)))}return l})();
+const WF={ctx:$("wfc").getContext("2d"),lo:null,row:null,notch:false};
+WF.row=WF.ctx.createImageData(512,1);
+WF.ctx.fillStyle="rgb(39,43,47)";WF.ctx.fillRect(0,0,512,150);
+function wfRow(d){
+  if(S.st.tx||S.st.keyed)return;
+  const s=Array.from(d).sort((a,b)=>a-b),fl=s[Math.floor(s.length*.3)];
+  WF.lo=WF.lo===null?fl:WF.lo+(fl-WF.lo)*.1;const span=70,ctx=WF.ctx;
+  ctx.drawImage(ctx.canvas,0,0,512,149,0,1,512,149);
+  for(let i=0;i<512;i++){const v=Math.max(0,Math.min(255,(d[i]-WF.lo+6)/span*255|0)),c=LUT[v],o=i*4;
+    WF.row.data[o]=c[0];WF.row.data[o+1]=c[1];WF.row.data[o+2]=c[2];WF.row.data[o+3]=255}
+  ctx.putImageData(WF.row,0,0);
+}
+function passband(s){
+  const w=s.width_hz||2400,f=fam();let c=1650;
+  if("37".includes(s.md||"x"))c=s.pitch||700;else if(f===2)c=1500;else if(f===1)c=300+w/2;
+  c+=(s.ifs_on?s.ifs:0)*(s.lower?-1:1);
+  return [Math.max(0,c-w/2),Math.min(3200,c+w/2)];
+}
+function renderPass(s){
+  const [a,b]=passband(s),W=3000*1.0;
+  $("wfpb").style.left=(a/W*100)+"%";$("wfpb").style.width=(Math.max(0,Math.min(b,W)-a)/W*100)+"%";
+  const n=$("wfnl");n.hidden=!s.notch_on;n.style.left=(s.notch_hz/W*100)+"%";
+  $("pbr").setAttribute("x",a/10);$("pbr").setAttribute("width",(b-a)/10);
+  $("pbn").style.display=s.notch_on?"":"none";$("pbn").setAttribute("x1",s.notch_hz/10);$("pbn").setAttribute("x2",s.notch_hz/10);
+  $("pbc").style.display=s.cont_on?"":"none";$("pbc").setAttribute("x1",s.cont/10);$("pbc").setAttribute("x2",s.cont/10);
+}
+function setWf(on){S.wf=on;$("wfon").classList.toggle("on",on);$("wfw").hidden=!on;$("wfmsg").hidden=!on||!S.st.wf_status;send("wf "+(on?1:0));
+  try{localStorage.setItem("wf",on?"1":"0")}catch(e){}
+  if(on&&!S.st.wf_dev)pickDev()}
+async function pickDev(){
+  try{const l=await api("/api/audio"),u=l.find(d=>d.name.startsWith("plughw")&&/usb/i.test(d.desc+d.name));if(u)send("wfdev "+u.name)}catch(e){}
+}
+$("wfon").onclick=()=>setWf(!S.wf);
+$("wfmode").onclick=()=>{WF.notch=!WF.notch;$("wfmode").textContent=WF.notch?"Kattintás: notch":"Kattintás: hangolás";$("wfmode").classList.toggle("on",WF.notch)};
+$("wf").addEventListener("click",e=>{
+  const r=e.currentTarget.getBoundingClientRect(),hz=Math.round((e.clientX-r.left)/r.width*3000),s=S.st;
+  if(WF.notch){send("filt 3 "+hz);send("filt 2 1");return}
+  const target="37".includes(s.md||"x")?(s.pitch||700):fam()===2?1500:300;
+  const d=(hz-target)*(s.lower?-1:1);setFa(Math.round((curFa()+d)/10)*10)});
+$("adev").onchange=e=>{if(e.target.value)send("wfdev "+e.target.value)};
+
+/* --- mikrofon-EQ --- */
+const Eq={base:1501,edit:{}};
+const eqId=(b,i)=>String(Eq.base+b*3+i);
+const eqV=id=>Eq.edit[id]??M.vals[id];
+function eqFreq(id){const d=defOf(id),v=+eqV(id);return v?d.min+(v-1)*d.step:0}
+function renderEq(){
+  if(!M.defs.length||M.vals[eqId(0,0)]===undefined)return;
+  $("eqn").classList.toggle("on",Eq.base===1501);$("eqp").classList.toggle("on",Eq.base===1510);
+  const host=$("eqb");host.innerHTML="";
+  for(let b=0;b<3;b++){
+    const c=document.createElement("div"),[fi,li,wi]=[eqId(b,0),eqId(b,1),eqId(b,2)],fd=defOf(fi);
+    c.innerHTML=`<h3>${b+1}. sáv</h3><label>Frekvencia</label>`;
+    const s=document.createElement("select");s.className="txt";s.setAttribute("aria-label",(b+1)+". sáv frekvenciája");
+    for(let i=0;i<=fd.max;i++){const o=document.createElement("option");o.value=raw(fd,i,M.vals[fi]);o.textContent=label(fd,o.value);s.append(o)}
+    s.value=eqV(fi);s.onchange=()=>eqSet(fi,s.value);c.append(s);
+    [[li,"Szint"],[wi,"Szélesség"]].forEach(([id,t])=>{const d=defOf(id),l=document.createElement("label");l.textContent=`${t}: ${label(d,eqV(id))}`;c.append(l);
+      const r=document.createElement("input");r.type="range";r.min=d.min;r.max=d.max;r.step=d.step;r.value=+eqV(id);r.setAttribute("aria-label",t);
+      r.oninput=()=>{l.textContent=`${t}: ${label(d,raw(d,+r.value,M.vals[id]))}`};r.onchange=()=>eqSet(id,raw(d,+r.value,M.vals[id]));c.append(r)});
+    host.append(c)}
+  const pts=[];for(let x=0;x<=320;x+=4){const hz=100*Math.pow(32,x/320);let g=0;
+    for(let b=0;b<3;b++){const f=eqFreq(eqId(b,0));if(!f)continue;const lv=+eqV(eqId(b,1)),bw=+eqV(eqId(b,2)),sig=.12+.05*(11-bw)*.5,u=Math.log2(hz/f)/sig/2;g+=lv*Math.exp(-u*u/2)}
+    pts.push(x+","+(37-g*1.2).toFixed(1))}
+  $("eql").setAttribute("points",pts.join(" "));
+  $("eqbar").hidden=!Object.keys(Eq.edit).length;
+}
+function eqSet(id,v){if(v===M.vals[id])delete Eq.edit[id];else Eq.edit[id]=v;renderEq()}
+$("eqn").onclick=()=>{Eq.base=1501;renderEq()};$("eqp").onclick=()=>{Eq.base=1510;renderEq()};
+$("eqd").onclick=()=>{Eq.edit={};renderEq()};
+$("eqw").onclick=async()=>{const body=Object.entries(Eq.edit).map(([i,v])=>i+"="+v).join("\n");if(await postMsg("/api/write",body)){Eq.edit={};renderEq()}};
+
+/* kapcsolat */
+function connect(){
+  const ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws");S.ws=ws;
+  ws.binaryType="arraybuffer";
+  ws.onopen=()=>{$("link").hidden=true;if(S.wf)send("wf 1");if(Au.rx)send("rx 1");if(S.tab==="t7"){Sv.id=-1;send("sview 1")}};
+  ws.onmessage=e=>{if(typeof e.data!=="string"){const a=new Uint8Array(e.data);if(a[0]===1)wfRow(a.subarray(1));else if(a[0]===2)rxPlay(a.subarray(1));else if(a[0]===3)ssLine(a.subarray(1));return}const m=JSON.parse(e.data);
+    if(m.t==="s")render(m);
+    else if(m.t==="log"){const l=$("log"),end=l.scrollTop+l.clientHeight>=l.scrollHeight-8;l.textContent=m.l.join("\n");if(end)l.scrollTop=l.scrollHeight}};
+  ws.onclose=()=>{S.pttOff();$("link").hidden=false;$("ptt").disabled=true;setTimeout(start,1500)};
+}
+async function start(){
+  try{const r=await fetch("/api/whoami"),j=await r.json();
+    if(j.auth){if($("login").open)$("login").close();connect()}
+    else if(!$("login").open){$("login").showModal();$("pin").focus()}
+  }catch(e){setTimeout(start,1500)}
+}
+$("loginf").onsubmit=async e=>{e.preventDefault();
+  const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"pin="+encodeURIComponent($("pin").value)});
+  if(r.ok){$("pin").value="";start();return}
+  let j={};try{j=await r.json()}catch(x){}
+  $("pinmsg").textContent=j.wait?`Túl sok hibás próbálkozás. Próbáld újra ${j.wait} mp múlva.`:"Hibás PIN-kód.";
+};
+try{const t=localStorage.getItem("tab");if(t)document.querySelector(`[data-tab=${t}]`).click();if(localStorage.getItem("wf")==="1"){S.wf=true;$("wfon").classList.add("on");$("wfw").hidden=false}}catch(e){}
+start();
+</script>
+</body>
+</html>
