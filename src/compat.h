@@ -39,6 +39,9 @@ void sys_default_cfg_dir(char *out, size_t cap);
 int  sys_local_ipv4(char (*out)[64], int max);  /* a gép nem 127.x címei */
 int  rename_replace(const char *from, const char *to);
 void sleep_ms(int ms);
+/* Konzolra írás: Windowson UTF-16-ként, hogy az ékezetek minden konzolon jók legyenek */
+void con_printf(const char *fmt, ...) __attribute__((format(PRINTF_FMT, 1, 2)));
+void con_eprintf(const char *fmt, ...) __attribute__((format(PRINTF_FMT, 1, 2)));
 
 #ifdef _WIN32
 #include <direct.h>

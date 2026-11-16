@@ -1,5 +1,6 @@
 /* Rendszerfüggő segédek: Linux és Windows */
 #include "ft891ctl.h"
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -40,6 +41,19 @@ int sys_local_ipv4(char (*out)[64], int max) {
 
 int rename_replace(const char *from, const char *to) { return rename(from, to); }
 void sleep_ms(int ms) { usleep((useconds_t)ms * 1000); }
+
+void con_printf(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+}
+void con_eprintf(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+}
 
 #else
 #define WIN32_LEAN_AND_MEAN
@@ -99,6 +113,40 @@ int rename_replace(const char *from, const char *to) {
 }
 
 void sleep_ms(int ms) { Sleep((DWORD)ms); }
+
+static void con_out(FILE *f, DWORD which, const char *fmt, va_list ap) {
+    char b[4096];
+    int n = vsnprintf(b, sizeof b, fmt, ap);
+    if (n < 0) return;
+    if (n >= (int)sizeof b) n = (int)sizeof b - 1;
+    HANDLE h = GetStdHandle(which);
+    DWORD mode;
+    if (h != INVALID_HANDLE_VALUE && GetConsoleMode(h, &mode)) {
+        static wchar_t w[4096];
+        static pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+        pthread_mutex_lock(&m);
+        fflush(f);
+        int k = MultiByteToWideChar(CP_UTF8, 0, b, n, w, 4096);
+        DWORD done;
+        if (k > 0) WriteConsoleW(h, w, (DWORD)k, &done, NULL);
+        pthread_mutex_unlock(&m);
+    } else {
+        fwrite(b, 1, (size_t)n, f);     /* fájlba irányítva UTF-8 marad */
+        fflush(f);
+    }
+}
+void con_printf(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    con_out(stdout, STD_OUTPUT_HANDLE, fmt, ap);
+    va_end(ap);
+}
+void con_eprintf(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    con_out(stderr, STD_ERROR_HANDLE, fmt, ap);
+    va_end(ap);
+}
 
 void *memmem(const void *h, size_t hn, const void *nd, size_t nn) {
     const char *p = h;

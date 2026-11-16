@@ -727,6 +727,8 @@ void web_start(void) {
     if (g_cfg.tls_port < 0) g_cfg.tls_port = g_cfg.web_port + 1;
 #ifdef HAVE_SSL
     if (g_cfg.tls_port) tls_start();
+#elif defined(_WIN32)
+    g_cfg.tls_port = 0;          /* a Windows-változatban nincs HTTPS */
 #else
     if (g_cfg.tls_port) log_msg(TR("A program HTTPS nélkül készült, a telefon mikrofonja nem elérhető. Telepítsd a libssl-dev csomagot, és fordítsd újra.", "The program was built without HTTPS, the phone microphone is not available. Install libssl-dev and rebuild."));
     g_cfg.tls_port = 0;
@@ -736,17 +738,17 @@ void web_start(void) {
 }
 
 void web_print_urls(void) {
-    printf(TR("\nFT891 Next " APP_VERSION "\n  Ezen a gépen:  http://127.0.0.1:%d\n",
+    con_printf(TR("\nFT891 Next " APP_VERSION "\n  Ezen a gépen:  http://127.0.0.1:%d\n",
               "\nFT891 Next " APP_VERSION "\n  This computer:  http://127.0.0.1:%d\n"), g_cfg.web_port);
     if (strcmp(g_cfg.web_bind, "127.0.0.1")) {
         char ip[16][64];
         int nip = sys_local_ipv4(ip, 16);
         for (int i = 0; i < nip; i++) {
-            printf(TR("  Telefonról:    http://%s:%d\n", "  From a phone:   http://%s:%d\n"), ip[i], g_cfg.web_port);
-            if (g_cfg.tls_port) printf(TR("  Mikrofonnal:   https://%s:%d\n", "  With mic:       https://%s:%d\n"), ip[i], g_cfg.tls_port);
+            con_printf(TR("  Telefonról:    http://%s:%d\n", "  From a phone:   http://%s:%d\n"), ip[i], g_cfg.web_port);
+            if (g_cfg.tls_port) con_printf(TR("  Mikrofonnal:   https://%s:%d\n", "  With mic:       https://%s:%d\n"), ip[i], g_cfg.tls_port);
         }
-        printf(TR("  PIN-kód:       %s\n", "  PIN:            %s\n"), g_cfg.pin);
+        con_printf(TR("  PIN-kód:       %s\n", "  PIN:            %s\n"), g_cfg.pin);
     }
-    printf("\n");
+    con_printf("\n");
     fflush(stdout);
 }

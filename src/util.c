@@ -66,7 +66,7 @@ static void log_store(const char *line) {
     utf8_trim(log_ring[log_total % LOG_LINES]);
     log_total++;
     pthread_mutex_unlock(&log_m);
-    fprintf(stderr, "%s %s\n", ts, line);
+    con_eprintf("%s %s\n", ts, line);
     if (log_f) fprintf(log_f, "%s %s\n", ts, line);
 }
 
@@ -81,7 +81,7 @@ void log_msg(const char *fmt, ...) {
 }
 
 void log_trace(const char *dir, const char *frame) {
-    if (g_cfg.trace) fprintf(stderr, "CAT %s %s\n", dir, frame);
+    if (g_cfg.trace) con_eprintf("CAT %s %s\n", dir, frame);
     if (g_cfg.trace && log_f) fprintf(log_f, "CAT %s %s\n", dir, frame);
 }
 
@@ -161,7 +161,7 @@ void config_load(void) {
 
 void config_new_pin(void) {
     uint32_t r = 0;
-    if (random_bytes(&r, sizeof r)) { fprintf(stderr, "%s", TR("Nem kérhető véletlenszám\n", "Cannot get random numbers\n")); exit(1); }
+    if (random_bytes(&r, sizeof r)) { con_eprintf("%s", TR("Nem kérhető véletlenszám\n", "Cannot get random numbers\n")); exit(1); }
     snprintf(g_cfg.pin, sizeof g_cfg.pin, "%06u", r % 1000000u);
     config_save();
 }

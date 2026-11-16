@@ -306,6 +306,33 @@ int ser_scan(ser_cand_t *c, int max) {
         snprintf(c[n].path, sizeof c[n].path, "%s", p[i].com);
         c[n++].trusted = 0;
     }
+    if (!n) {
+        /* Tartalék (pl. Wine alatt): a rendszer COM-port listája a registryben */
+        HKEY k;
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "HARDWARE\\DEVICEMAP\\SERIALCOMM", 0, KEY_READ, &k) == ERROR_SUCCESS) {
+            for (DWORD i = 0; n < max; i++) {
+                char name[256], val[64];
+                DWORD nl = sizeof name, vl = sizeof val - 1, type;
+                if (RegEnumValueA(k, i, name, &nl, NULL, &type, (BYTE *)val, &vl) != ERROR_SUCCESS) break;
+                if (type != REG_SZ) continue;
+                val[vl] = 0;
+                snprintf(c[n].path, sizeof c[n].path, "%s", val);
+                c[n++].trusted = 0;
+            }
+            RegCloseKey(k);
+        }
+    }
+    if (!n) {
+        char t[512];
+        for (int i = 1; i <= 64 && n < max; i++) {
+            char nm[16];
+            snprintf(nm, sizeof nm, "COM%d", i);
+            if (QueryDosDeviceA(nm, t, sizeof t)) {
+                snprintf(c[n].path, sizeof c[n].path, "%s", nm);
+                c[n++].trusted = 0;
+            }
+        }
+    }
     qsort(c, (size_t)n, sizeof *c, cmp_com);
     return n;
 }

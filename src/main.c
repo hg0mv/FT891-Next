@@ -13,7 +13,7 @@ static void on_signal(int s) { (void)s; g_stop = 1; }
 
 static void usage(void) {
     if (!g_cfg.lang_en) {
-        puts("FT891 Next " APP_VERSION "\n\n"
+        con_printf("%s\n", "FT891 Next " APP_VERSION "\n\n"
              "Használat: ft891ctl [kapcsolók]\n"
              "  --cat-port ÚT     CAT-port (alap: automatikus keresés)\n"
              "  --ptt-port ÚT     RTS/DTR PTT portja (alap: a CAT-port párja)\n"
@@ -32,7 +32,7 @@ static void usage(void) {
              "  --new-pin         új PIN-kódot készít\n");
         return;
     }
-    puts("FT891 Next " APP_VERSION "\n\n"
+    con_printf("%s\n", "FT891 Next " APP_VERSION "\n\n"
          "Usage: ft891ctl [options]\n"
          "  --cat-port PATH   CAT port (default: automatic search)\n"
          "  --ptt-port PATH   RTS/DTR PTT port (default: the CAT port's pair)\n"
