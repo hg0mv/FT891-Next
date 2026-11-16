@@ -77,9 +77,10 @@ Recommended radio menu settings:
 
 ## Windows (experimental)
 
-A Windows build is in progress. The first step covers rig control, the web interface, menus,
-memories and the rigctld-compatible port. Audio (waterfall, remote audio, microphone, SSTV)
-and HTTPS are not in the Windows build yet.
+The Windows build is new and has not been tested on air yet. Everything works as on Linux
+except HTTPS: the browser microphone works on the Windows computer itself, but a phone
+microphone needs `tailscale serve` (see Remote use) or the Linux build. Audio uses the
+Windows sound devices directly; choose the radio's "USB Audio CODEC" input in Settings.
 
 Build it on Linux with MinGW:
 

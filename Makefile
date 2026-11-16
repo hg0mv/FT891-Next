@@ -25,12 +25,12 @@ test: ft891ctl
 	python3 tests/run_tests.py
 
 # Windows-változat Linuxon fordítva: sudo apt install mingw-w64
-# A hang és a HTTPS ebben a változatban még nincs benne.
+# A HTTPS ebben a változatban még nincs benne.
 WINCC ?= x86_64-w64-mingw32-gcc
 windows: ft891ctl.exe
 ft891ctl.exe: $(SRC) src/ft891ctl.h src/compat.h src/net.h src/menus.def web/index.html
 	$(WINCC) -O2 -Wall -Wextra -std=gnu11 -D_WIN32_WINNT=0x0601 -D__USE_MINGW_ANSI_STDIO=1 \
-		-o $@ $(SRC) -static -lpthread -lws2_32 -liphlpapi -lsetupapi -lbcrypt -lm
+		-o $@ $(SRC) -static -lpthread -lws2_32 -liphlpapi -lsetupapi -lbcrypt -lwinmm -lm
 
 clean:
 	rm -f src/*.o ft891ctl ft891ctl.exe

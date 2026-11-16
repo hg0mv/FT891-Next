@@ -1,17 +1,22 @@
 /* Vízesés: az arecord hangját FFT-vel bontja, a böngésző csak az eredményt kapja.
    Az arecord külön folyamat, így a programnak nincs ALSA-függősége. */
 #include "ft891ctl.h"
-#ifndef _WIN32
 #include <errno.h>
-#include <fcntl.h>
 #include <math.h>
-#include <poll.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#else
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <mmsystem.h>
+#endif
 
 #define RATE 48000
 #define NFFT 8192
@@ -29,15 +34,19 @@ static int running;
 static uint8_t rx_ring[RX_RING][RX_CHUNK];
 static unsigned rx_seq;
 
-/* adási hang */
-static pid_t tx_pid;
-static int tx_fd = -1, tx_owner = -1;
+static void feed(const int16_t *buf, size_t frames, int channels);
+static void capture(const char *dev, int channels);
 
 static void set_status(const char *s) {
     pthread_mutex_lock(&A);
     if (strcmp(status_txt, s)) { snprintf(status_txt, sizeof status_txt, "%s", s); pthread_mutex_unlock(&A); log_msg(TR("Vízesés: %s", "Waterfall: %s"), s); rig_bump_only(); return; }
     pthread_mutex_unlock(&A);
 }
+
+#ifndef _WIN32
+/* adási hang */
+static pid_t tx_pid;
+static int tx_fd = -1, tx_owner = -1;
 
 static const char *arecord_bin(void) { return g_cfg.arecord[0] ? g_cfg.arecord : "arecord"; }
 
@@ -88,8 +97,9 @@ void audio_list(sb_t *b) {
     }
     sb_add(b, "]");
 }
+#endif
 
-/* Csak az arecord -L által felsorolt eszköz választható */
+/* Csak a felsorolt eszközök közül lehet választani */
 int audio_set_dev(const char *dev) {
     sb_t b = {0};
     char q[140];
@@ -163,6 +173,7 @@ unsigned audio_rx(uint8_t *out, unsigned *cursor) {
     return got;
 }
 
+#ifndef _WIN32
 static void tx_close_locked(void) {
     if (tx_fd >= 0) close(tx_fd);
     tx_fd = -1;
@@ -223,6 +234,7 @@ void audio_tx_write(int owner, const uint8_t *d, size_t n) {
     }
     pthread_mutex_unlock(&A);
 }
+#endif
 
 static void fft(float *re, float *im) {
     static float wr[NFFT / 2], wi[NFFT / 2];
@@ -279,6 +291,26 @@ static void analyse(const float *ring, int pos) {
     pthread_mutex_unlock(&A);
 }
 
+static float ring[NFFT];
+static int ring_pos, ring_hop;
+static long long fed;
+
+/* A hangkártya mintái: vízesés, vételi hang és SSTV */
+static void feed(const int16_t *buf, size_t frames, int channels) {
+    for (size_t i = 0; i < frames; i++) {
+        ring[ring_pos] = buf[i * (size_t)channels] / 32768.0f;
+        rx_push(ring[ring_pos]);
+        ring_pos = (ring_pos + 1) % NFFT;
+        if (++ring_hop >= HOP) {
+            ring_hop = 0;
+            analyse(ring, ring_pos);
+        }
+    }
+    if (!fed && frames) set_status("");
+    fed += (long long)frames;
+}
+
+#ifndef _WIN32
 static void capture(const char *dev, int channels) {
     char ch[8], rate[16];
     snprintf(ch, sizeof ch, "%d", channels);
@@ -288,9 +320,6 @@ static void capture(const char *dev, int channels) {
     int fd, efd;
     pid_t p = spawn(argv, &fd, &efd);
     if (p < 0) { set_status(TR("Az arecord nem indítható.", "Cannot start arecord.")); return; }
-    static float ring[NFFT];
-    int pos = 0, hop = 0;
-    long long total = 0;
     int16_t buf[2048];
     size_t have = 0;
     char err[200] = "";
@@ -298,6 +327,7 @@ static void capture(const char *dev, int channels) {
     pthread_mutex_lock(&A);
     running = 1;
     pthread_mutex_unlock(&A);
+    fed = 0;
     while (!g_stop) {
         pthread_mutex_lock(&A);
         int go = want > 0 && running;
@@ -316,20 +346,10 @@ static void capture(const char *dev, int channels) {
         if (n <= 0) break;
         have += (size_t)n;
         size_t frames = have / (sizeof(int16_t) * (size_t)channels);
-        for (size_t i = 0; i < frames; i++) {
-            ring[pos] = buf[i * (size_t)channels] / 32768.0f;
-            rx_push(ring[pos]);
-            pos = (pos + 1) % NFFT;
-            if (++hop >= HOP) {
-                hop = 0;
-                analyse(ring, pos);
-            }
-        }
+        feed(buf, frames, channels);
         size_t used = frames * sizeof(int16_t) * (size_t)channels;
         memmove(buf, (char *)buf + used, have - used);
         have -= used;
-        if (!total && frames) set_status("");
-        total += (long long)frames;
     }
     kill(p, SIGTERM);
     close(fd);
@@ -341,7 +361,7 @@ static void capture(const char *dev, int channels) {
     int wanted = want > 0 && running;
     running = 0;
     pthread_mutex_unlock(&A);
-    if (wanted && !g_stop && !total) {
+    if (wanted && !g_stop && !fed) {
         char m[160];
         if (WIFEXITED(st) && WEXITSTATUS(st) == 127) snprintf(m, sizeof m, TR("Nincs telepítve az arecord. Futtasd: sudo apt install alsa-utils", "arecord is not installed. Run: sudo apt install alsa-utils"));
         else if (strstr(err, "busy")) snprintf(m, sizeof m, TR("A hangkártyát másik program használja. Válassz dsnoop eszközt a Beállításban.", "Another program is using the sound card. Choose a dsnoop device in Settings."));
@@ -350,6 +370,7 @@ static void capture(const char *dev, int channels) {
         set_status(m);
     } else if (wanted && !g_stop) set_status(TR("A hangkártya kapcsolata megszakadt.", "The sound card connection was lost."));
 }
+#endif
 
 static void *audio_main(void *arg) {
     (void)arg;
@@ -363,13 +384,13 @@ static void *audio_main(void *arg) {
         rig_cfg_get(&x, &y, &z, dev, sizeof dev);
         if (!go || !dev[0]) {
             if (go) set_status(TR("Válaszd ki a hangkártyát a Beállításban.", "Choose the sound card in Settings."));
-            usleep(200000);
+            sleep_ms(200);
             continue;
         }
         long long t0 = now_ms();
         capture(dev, channels);
         /* Egyes kártyák csak sztereót tudnak */
-        if (now_ms() - t0 < 1000) { channels = channels == 1 ? 2 : 1; usleep(channels == 2 ? 100000 : 1500000); }
+        if (now_ms() - t0 < 1000) { channels = channels == 1 ? 2 : 1; sleep_ms(channels == 2 ? 100 : 1500); }
     }
     return NULL;
 }
@@ -400,21 +421,215 @@ void audio_status(char *out, size_t cap) {
     pthread_mutex_unlock(&A);
 }
 
-#else
-/* Windowson a hang egyelőre nem működik: a felület ezt írja ki, minden más megy */
-#include <stdio.h>
-#include <string.h>
-void audio_start(void) {}
-void audio_want(int delta) { (void)delta; }
-unsigned audio_frame(uint8_t *out, unsigned last) { (void)out; return last; }
-void audio_status(char *out, size_t cap) {
-    snprintf(out, cap, "%s", TR("Windowson a hang (vízesés, hang, mikrofon, SSTV) még nem érhető el.",
-                                "Audio (waterfall, sound, microphone, SSTV) is not available on Windows yet."));
+
+#ifdef _WIN32
+/* ---------------------------------------------------- Windows: waveIn/waveOut */
+#define WBUFS   8
+#define WFRAMES 1920        /* 40 ms 48 kHz-en */
+#define TXBUFS  32
+#define TXMAX   2048        /* minta egy adási pufferben */
+
+/* Az eszköz neve a Windows által mutatott név; JSON-ba tehetővé tesszük */
+static void clean_name(const char *in, char *out, size_t cap) {
+    size_t k = 0;
+    for (; *in && k + 1 < cap; in++) out[k++] = (*in == '"' || *in == '\\' || (unsigned char)*in < 32) ? ' ' : *in;
+    out[k] = 0;
 }
-void audio_list(sb_t *b) { sb_add(b, "[]"); }
-unsigned audio_rx(uint8_t *out, unsigned *cursor) { (void)out; (void)cursor; return 0; }
-int  audio_tx_begin(int owner) { (void)owner; return -1; }
-void audio_tx_end(int owner) { (void)owner; }
-void audio_tx_write(int owner, const uint8_t *d, size_t n) { (void)owner; (void)d; (void)n; }
-int  audio_set_dev(const char *dev) { (void)dev; return -1; }
+
+static int find_in(const char *dev) {
+    UINT n = waveInGetNumDevs();
+    for (UINT i = 0; i < n; i++) {
+        WAVEINCAPSA c;
+        char nm[64];
+        if (waveInGetDevCapsA(i, &c, sizeof c) != MMSYSERR_NOERROR) continue;
+        clean_name(c.szPname, nm, sizeof nm);
+        if (!strcmp(nm, dev)) return (int)i;
+    }
+    return -1;
+}
+
+/* A bemenet párja: a zárójelben álló eszköznév (pl. "USB Audio CODEC") egyezik */
+static int find_out(const char *dev) {
+    char key[64];
+    const char *o = strchr(dev, '(');
+    snprintf(key, sizeof key, "%s", o ? o + 1 : dev);
+    key[strcspn(key, ")")] = 0;
+    while (*key && key[strlen(key) - 1] == ' ') key[strlen(key) - 1] = 0;
+    UINT n = waveOutGetNumDevs();
+    for (UINT i = 0; i < n; i++) {
+        WAVEOUTCAPSA c;
+        char nm[64];
+        if (waveOutGetDevCapsA(i, &c, sizeof c) != MMSYSERR_NOERROR) continue;
+        clean_name(c.szPname, nm, sizeof nm);
+        if (*key && strstr(nm, key)) return (int)i;
+    }
+    return -1;
+}
+
+void audio_list(sb_t *b) {
+    UINT n = waveInGetNumDevs();
+    int first = 1;
+    sb_add(b, "[");
+    for (UINT i = 0; i < n; i++) {
+        WAVEINCAPSA c;
+        char nm[64];
+        if (waveInGetDevCapsA(i, &c, sizeof c) != MMSYSERR_NOERROR) continue;
+        clean_name(c.szPname, nm, sizeof nm);
+        sb_add(b, "%s{\"name\":\"%s\",\"desc\":\"%s\"}", first ? "" : ",", nm,
+               find_out(nm) >= 0 ? TR("vétel és adás", "receive and transmit") : TR("csak vétel", "receive only"));
+        first = 0;
+    }
+    sb_add(b, "]");
+}
+
+static void capture(const char *dev, int channels) {
+    int id = find_in(dev);
+    if (id < 0) { set_status(TR("A kiválasztott hangkártya nem található.", "The selected sound card is not found.")); sleep_ms(1000); return; }
+    HANDLE ev = CreateEventA(NULL, FALSE, FALSE, NULL);
+    WAVEFORMATEX f;
+    memset(&f, 0, sizeof f);
+    f.wFormatTag = WAVE_FORMAT_PCM;
+    f.nChannels = (WORD)channels;
+    f.nSamplesPerSec = RATE;
+    f.wBitsPerSample = 16;
+    f.nBlockAlign = (WORD)(2 * channels);
+    f.nAvgBytesPerSec = RATE * f.nBlockAlign;
+    HWAVEIN h;
+    if (!ev || waveInOpen(&h, (UINT)id, &f, (DWORD_PTR)ev, 0, CALLBACK_EVENT) != MMSYSERR_NOERROR) {
+        if (ev) CloseHandle(ev);
+        char m[160];
+        snprintf(m, sizeof m, TR("A hangkártya nem nyitható meg: %.100s", "Cannot open the sound card: %.100s"), dev);
+        utf8_trim(m);
+        set_status(m);
+        return;
+    }
+    static int16_t data[WBUFS][WFRAMES * 2];
+    WAVEHDR hd[WBUFS];
+    for (int i = 0; i < WBUFS; i++) {
+        memset(&hd[i], 0, sizeof hd[i]);
+        hd[i].lpData = (LPSTR)data[i];
+        hd[i].dwBufferLength = (DWORD)(WFRAMES * f.nBlockAlign);
+        waveInPrepareHeader(h, &hd[i], sizeof hd[i]);
+        waveInAddBuffer(h, &hd[i], sizeof hd[i]);
+    }
+    pthread_mutex_lock(&A);
+    running = 1;
+    pthread_mutex_unlock(&A);
+    fed = 0;
+    waveInStart(h);
+    long long last = now_ms();
+    int lost = 0;
+    while (!g_stop) {
+        pthread_mutex_lock(&A);
+        int go = want > 0 && running;
+        pthread_mutex_unlock(&A);
+        if (!go) break;
+        WaitForSingleObject(ev, 200);
+        for (int i = 0; i < WBUFS; i++) {
+            if (!(hd[i].dwFlags & WHDR_DONE)) continue;
+            feed((const int16_t *)hd[i].lpData, hd[i].dwBytesRecorded / f.nBlockAlign, channels);
+            hd[i].dwFlags &= ~(DWORD)WHDR_DONE;
+            hd[i].dwBytesRecorded = 0;
+            if (waveInAddBuffer(h, &hd[i], sizeof hd[i]) != MMSYSERR_NOERROR) lost = 1;
+            last = now_ms();
+        }
+        if (lost || now_ms() - last > 2000) { lost = 1; break; }   /* kihúzták vagy elakadt */
+    }
+    waveInReset(h);
+    for (int i = 0; i < WBUFS; i++) waveInUnprepareHeader(h, &hd[i], sizeof hd[i]);
+    waveInClose(h);
+    CloseHandle(ev);
+    pthread_mutex_lock(&A);
+    int wanted = want > 0 && running;
+    running = 0;
+    pthread_mutex_unlock(&A);
+    if (wanted && !g_stop && (lost || !fed)) set_status(TR("A hangkártya kapcsolata megszakadt.", "The sound card connection was lost."));
+}
+
+/* --- adás: a böngésző 8 kHz-es mu-law hangja PCM-ként megy a hangkártyára --- */
+static HWAVEOUT tx_h;
+static int tx_owner = -1;
+static WAVEHDR tx_hd[TXBUFS];
+static int16_t tx_data[TXBUFS][TXMAX];
+
+static int16_t unmulaw(uint8_t u) {
+    u = (uint8_t)~u;
+    int t = ((u & 15) << 3) + 132;
+    t <<= (u >> 4) & 7;
+    return (int16_t)((u & 0x80) ? 132 - t : t - 132);
+}
+
+static void tx_close_locked(void) {
+    if (tx_h) {
+        waveOutReset(tx_h);
+        for (int i = 0; i < TXBUFS; i++)
+            if (tx_hd[i].dwFlags & WHDR_PREPARED) waveOutUnprepareHeader(tx_h, &tx_hd[i], sizeof tx_hd[i]);
+        waveOutClose(tx_h);
+    }
+    tx_h = NULL;
+    tx_owner = -1;
+}
+
+int audio_tx_begin(int owner) {
+    char dev[128];
+    int x, y, z;
+    rig_cfg_get(&x, &y, &z, dev, sizeof dev);
+    if (!dev[0]) { rig_notice(1, TR("Válaszd ki a hangkártyát a Beállításban.", "Choose the sound card in Settings.")); return -1; }
+    pthread_mutex_lock(&A);
+    if (tx_h) { pthread_mutex_unlock(&A); return tx_owner == owner ? 0 : -1; }
+    int id = find_out(dev);
+    WAVEFORMATEX f;
+    memset(&f, 0, sizeof f);
+    f.wFormatTag = WAVE_FORMAT_PCM;
+    f.nChannels = 1;
+    f.nSamplesPerSec = 8000;
+    f.wBitsPerSample = 16;
+    f.nBlockAlign = 2;
+    f.nAvgBytesPerSec = 16000;
+    if (id < 0 || waveOutOpen(&tx_h, (UINT)id, &f, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
+        tx_h = NULL;
+        pthread_mutex_unlock(&A);
+        rig_notice(1, TR("A hangkártya kimenete nem nyitható meg. Nézd meg a kiválasztott eszközt.", "Cannot open the sound card output. Check the selected device."));
+        return -1;
+    }
+    memset(tx_hd, 0, sizeof tx_hd);
+    tx_owner = owner;
+    pthread_mutex_unlock(&A);
+    return 0;
+}
+
+void audio_tx_end(int owner) {
+    pthread_mutex_lock(&A);
+    if (tx_owner == owner) tx_close_locked();
+    pthread_mutex_unlock(&A);
+}
+
+void audio_tx_write(int owner, const uint8_t *d, size_t n) {
+    pthread_mutex_lock(&A);
+    while (tx_owner == owner && tx_h && n) {
+        int slot = -1;
+        for (int i = 0; i < TXBUFS && slot < 0; i++) {
+            WAVEHDR *w = &tx_hd[i];
+            if (!(w->dwFlags & WHDR_PREPARED)) slot = i;
+            else if (w->dwFlags & WHDR_DONE) { waveOutUnprepareHeader(tx_h, w, sizeof *w); slot = i; }
+        }
+        if (slot < 0) break;          /* túl sok vár lejátszásra: eldobjuk, hogy ne késsen */
+        size_t k = n < TXMAX ? n : TXMAX;
+        for (size_t i = 0; i < k; i++) tx_data[slot][i] = unmulaw(d[i]);
+        WAVEHDR *w = &tx_hd[slot];
+        memset(w, 0, sizeof *w);
+        w->lpData = (LPSTR)tx_data[slot];
+        w->dwBufferLength = (DWORD)(k * 2);
+        if (waveOutPrepareHeader(tx_h, w, sizeof *w) != MMSYSERR_NOERROR ||
+            waveOutWrite(tx_h, w, sizeof *w) != MMSYSERR_NOERROR) {
+            tx_close_locked();
+            pthread_mutex_unlock(&A);
+            rig_notice(1, TR("A hangkártyára nem lehet írni. Nézd meg a kiválasztott eszközt.", "Cannot write to the sound card. Check the selected device."));
+            return;
+        }
+        d += k;
+        n -= k;
+    }
+    pthread_mutex_unlock(&A);
+}
 #endif
