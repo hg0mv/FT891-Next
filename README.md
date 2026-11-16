@@ -4,7 +4,7 @@ A standalone control program for the Yaesu FT-891 on Linux. One background progr
 radio's CAT port; you control it from a web browser on the same computer, from your phone,
 and from other ham radio programs at the same time.
 
-**Status:** version 0.6. Rig control, menus, memories, waterfall, filters and remote audio are
+**Status:** version 0.7-beta1 (Windows build in testing). Rig control, menus, memories, waterfall, filters and remote audio are
 tested on air with a real FT-891. The SSTV decoder is tested with generated signals only;
 on-air reports are welcome.
 

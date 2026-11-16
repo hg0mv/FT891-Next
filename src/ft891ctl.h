@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include "compat.h"
 
-#define APP_VERSION "0.6"
+#define APP_VERSION "0.7-beta1"
 #define RX_CHUNK 640    /* 80 ms hang: 8 kHz, mu-law */
 #define WF_BINS 512
 #define MENU_MAX 16
