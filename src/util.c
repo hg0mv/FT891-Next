@@ -28,7 +28,7 @@ static void mkdirs(const char *path) {
     char tmp[256];
     snprintf(tmp, sizeof tmp, "%s", path);
     for (char *p = tmp + 1; *p; p++)
-        if (*p == '/') { *p = 0; mkdir(tmp, 0700); *p = '/'; }
+        if (*p == '/' || *p == '\\') { char c = *p; *p = 0; mkdir(tmp, 0700); *p = c; }
     mkdir(tmp, 0700);
 }
 
@@ -37,7 +37,11 @@ void log_init(void) {
     mkdirs(g_cfg.cfg_dir);
     snprintf(path, sizeof path, "%.280s/ft891ctl.log", g_cfg.cfg_dir);
     log_f = fopen(path, "a");
+#ifdef _WIN32
+    if (log_f) setvbuf(log_f, NULL, _IONBF, 0);   /* Windowson a soronkénti puffer nem létezik */
+#else
     if (log_f) setvbuf(log_f, NULL, _IOLBF, 0);
+#endif
 }
 
 /* A levágott szöveg végéről eltávolítja a csonka UTF-8 karaktert:
@@ -120,6 +124,7 @@ int log_copy_json(char *out, size_t cap, unsigned *seq_out) {
     return (int)n;
 }
 
+#ifndef _WIN32
 int random_bytes(void *buf, size_t n) {
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd < 0) return -1;
@@ -127,6 +132,7 @@ int random_bytes(void *buf, size_t n) {
     close(fd);
     return r == (ssize_t)n ? 0 : -1;
 }
+#endif
 
 /* --- beállításfájl --- */
 void config_load(void) {
@@ -155,7 +161,7 @@ void config_load(void) {
 
 void config_new_pin(void) {
     uint32_t r = 0;
-    if (random_bytes(&r, sizeof r)) { fprintf(stderr, "%s", TR("Nem olvasható /dev/urandom\n", "Cannot read /dev/urandom\n")); exit(1); }
+    if (random_bytes(&r, sizeof r)) { fprintf(stderr, "%s", TR("Nem kérhető véletlenszám\n", "Cannot get random numbers\n")); exit(1); }
     snprintf(g_cfg.pin, sizeof g_cfg.pin, "%06u", r % 1000000u);
     config_save();
 }
@@ -170,7 +176,7 @@ void config_save(void) {
     fprintf(f, "pin=%s\nlang=%s\nptt_method=%d\nmode_lock=%d\ntx_max_s=%d\nlast_baud=%d\naudio_dev=%s\n",
             g_cfg.pin, g_cfg.lang_en ? "en" : "hu", g_cfg.ptt_method, g_cfg.mode_lock, g_cfg.tx_max_s, g_cfg.last_baud, g_cfg.audio_dev);
     fclose(f);
-    rename(tmp, path);
+    rename_replace(tmp, path);
 }
 
 /* --- SHA-1 (a WebSocket kézfogáshoz) --- */

@@ -1,6 +1,7 @@
 /* Vízesés: az arecord hangját FFT-vel bontja, a böngésző csak az eredményt kapja.
    Az arecord külön folyamat, így a programnak nincs ALSA-függősége. */
 #include "ft891ctl.h"
+#ifndef _WIN32
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
@@ -398,3 +399,22 @@ void audio_status(char *out, size_t cap) {
     snprintf(out, cap, "%s", status_txt);
     pthread_mutex_unlock(&A);
 }
+
+#else
+/* Windowson a hang egyelőre nem működik: a felület ezt írja ki, minden más megy */
+#include <stdio.h>
+#include <string.h>
+void audio_start(void) {}
+void audio_want(int delta) { (void)delta; }
+unsigned audio_frame(uint8_t *out, unsigned last) { (void)out; return last; }
+void audio_status(char *out, size_t cap) {
+    snprintf(out, cap, "%s", TR("Windowson a hang (vízesés, hang, mikrofon, SSTV) még nem érhető el.",
+                                "Audio (waterfall, sound, microphone, SSTV) is not available on Windows yet."));
+}
+void audio_list(sb_t *b) { sb_add(b, "[]"); }
+unsigned audio_rx(uint8_t *out, unsigned *cursor) { (void)out; (void)cursor; return 0; }
+int  audio_tx_begin(int owner) { (void)owner; return -1; }
+void audio_tx_end(int owner) { (void)owner; }
+void audio_tx_write(int owner, const uint8_t *d, size_t n) { (void)owner; (void)d; (void)n; }
+int  audio_set_dev(const char *dev) { (void)dev; return -1; }
+#endif

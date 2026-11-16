@@ -180,7 +180,7 @@ static void finish(const char *why) {
         char tmp[430];
         snprintf(path, sizeof path, "%s/%s.png", dir, nm);
         snprintf(tmp, sizeof tmp, "%s/%s.part", dir, nm);
-        if (save_png(tmp, M->w, M->h) || rename(tmp, path)) log_msg(TR("Az SSTV-kép nem menthető", "Cannot save the SSTV picture"));
+        if (save_png(tmp, M->w, M->h) || rename_replace(tmp, path)) log_msg(TR("Az SSTV-kép nem menthető", "Cannot save the SSTV picture"));
         else log_msg(TR("SSTV-kép mentve: %s.png", "SSTV picture saved: %s.png"), nm);
         int n = list_imgs(l, 256);
         for (int i = 0; i < n; i++) {

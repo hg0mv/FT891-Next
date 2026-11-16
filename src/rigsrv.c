@@ -1,17 +1,12 @@
 /* rigctld-kompatibilis TCP-szerver: a helyi programok ezen át érik el a rádiót */
 #include "ft891ctl.h"
-#include <arpa/inet.h>
+#include "net.h"
 #include <errno.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #define MAX_CLIENTS 8
 #define RIG_OK 0
@@ -34,7 +29,7 @@ static void flush_out(cl_t *c) {
     c->n = 0;
 }
 
-static void pr(cl_t *c, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+static void pr(cl_t *c, const char *fmt, ...) __attribute__((format(PRINTF_FMT, 2, 3)));
 static void pr(cl_t *c, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -242,7 +237,7 @@ static void *client_main(void *p) {
     int done = 0;
     while (!g_stop && !done) {
         struct pollfd pf = {a.fd, POLLIN, 0};
-        int r = poll(&pf, 1, 500);
+        int r = sock_poll(&pf, 1, 500);
         if (r == 0) continue;
         if (r < 0 && errno == EINTR) continue;
         if (r < 0) break;
@@ -265,7 +260,7 @@ static void *client_main(void *p) {
     }
     /* Ha a program adás közben szűnt meg, az adást elengedjük */
     rig_hold(SRC_RIG(a.slot), 0, 0);
-    close(a.fd);
+    sock_close(a.fd);
     pthread_mutex_lock(&slot_m);
     slot_used[a.slot] = 0;
     pthread_mutex_unlock(&slot_m);
@@ -276,15 +271,14 @@ static void *accept_main(void *p) {
     int ls = *(int *)p;
     free(p);
     while (!g_stop) {
-        int f = accept(ls, NULL, NULL);
+        int f = sock_accept(ls, NULL, NULL);
         if (f < 0) { if (errno == EINTR) continue; break; }
-        int one = 1;
-        setsockopt(f, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
+        sock_nodelay(f);
         int slot = -1;
         pthread_mutex_lock(&slot_m);
         for (int i = 0; i < MAX_CLIENTS; i++) if (!slot_used[i]) { slot = i; slot_used[i] = 1; break; }
         pthread_mutex_unlock(&slot_m);
-        if (slot < 0) { close(f); continue; }
+        if (slot < 0) { sock_close(f); continue; }
         arg_t *a = malloc(sizeof *a);
         a->fd = f; a->slot = slot;
         pthread_t t;
@@ -295,15 +289,15 @@ static void *accept_main(void *p) {
 }
 
 void rigsrv_start(void) {
-    int ls = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0), one = 1;
+    int ls = (int)socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     struct sockaddr_in sa = {0};
     sa.sin_family = AF_INET;
     sa.sin_port = htons((uint16_t)g_cfg.rig_port);
     inet_pton(AF_INET, g_cfg.rig_bind, &sa.sin_addr);
-    setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+    sock_reuse(ls);
     if (bind(ls, (struct sockaddr *)&sa, sizeof sa) || listen(ls, 8)) {
         log_msg(TR("A rigctld-port (%d) foglalt: %s. Állítsd le a rigctld-t.", "The rigctld port (%d) is in use: %s. Stop rigctld."), g_cfg.rig_port, strerror(errno));
-        close(ls);
+        sock_close(ls);
         return;
     }
     log_msg(TR("rigctld-kompatibilis port: %s:%d", "rigctld-compatible port: %s:%d"), g_cfg.rig_bind, g_cfg.rig_port);

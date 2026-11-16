@@ -7,7 +7,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifndef _WIN32
 static void on_signal(int s) { (void)s; g_stop = 1; }
+#endif
 
 static void usage(void) {
     if (!g_cfg.lang_en) {
@@ -63,14 +65,11 @@ int main(int argc, char **argv) {
     g_cfg.poll_ms = 250;
     g_cfg.use_ai = 1;
     g_cfg.tx_max_s = 180;
-    const char *home = getenv("HOME");
-    snprintf(g_cfg.cfg_dir, sizeof g_cfg.cfg_dir, "%s/.config/ft891ctl", home ? home : ".");
+    sys_init();
+    sys_default_cfg_dir(g_cfg.cfg_dir, sizeof g_cfg.cfg_dir);
 
     /* A nyelv alapértéke a rendszer nyelve; a súgóhoz már most kell */
-    const char *loc = getenv("LC_ALL");
-    if (!loc || !*loc) loc = getenv("LC_MESSAGES");
-    if (!loc || !*loc) loc = getenv("LANG");
-    g_cfg.lang_en = !(loc && !strncmp(loc, "hu", 2));
+    g_cfg.lang_en = !sys_lang_hu();
     int c, new_pin = 0, lang = -1;
     while ((c = getopt_long(argc, argv, "h", o, NULL)) != -1) {
         switch (c) {
@@ -113,19 +112,25 @@ int main(int argc, char **argv) {
     if (new_pin) config_new_pin();
     menu_init();
 
+#ifndef _WIN32
     struct sigaction sa;
     memset(&sa, 0, sizeof sa);
     sa.sa_handler = on_signal;
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
     signal(SIGPIPE, SIG_IGN);
+#endif
 
     rig_start();
     if (g_cfg.rig_port > 0) rigsrv_start();
     audio_start();
     web_start();
     web_print_urls();
+#ifndef _WIN32
     while (!g_stop) pause();
+#else
+    while (!g_stop) sleep_ms(200);   /* a Ctrl+C-t a compat.c kezelője jelzi */
+#endif
     log_msg(TR("Leállítás", "Shutting down"));
     rig_stop();
     return 0;

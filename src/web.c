@@ -1,23 +1,15 @@
 /* Webes felület: HTTP + WebSocket, PIN-védelemmel */
 #include "ft891ctl.h"
-#include <arpa/inet.h>
+#include "net.h"
 #include <errno.h>
-#include <fcntl.h>
-#include <ifaddrs.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <sys/time.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #ifdef HAVE_SSL
 #include <openssl/err.h>
+#include <fcntl.h>
 #include <openssl/ssl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -25,7 +17,12 @@ static SSL_CTX *tls_ctx;
 static __thread SSL *cur_ssl;
 #endif
 
-__asm__(".section .rodata\n.global page_start\npage_start:\n.incbin \"web/index.html\"\n"
+#ifdef _WIN32
+#define PAGE_SECTION ".section .rdata,\"dr\"\n"
+#else
+#define PAGE_SECTION ".section .rodata\n"
+#endif
+__asm__(PAGE_SECTION ".global page_start\npage_start:\n.incbin \"web/index.html\"\n"
         ".global page_end\npage_end:\n.byte 0\n.text\n");
 extern const char page_start[], page_end[];
 
@@ -362,7 +359,7 @@ static void ws_loop(int fd, int slot) {
             if (fail) break;
         }
         struct pollfd p = {fd, POLLIN, 0};
-        int r = io_ready() ? 1 : poll(&p, 1, wf || rx ? 40 : 100);
+        int r = io_ready() ? 1 : sock_poll(&p, 1, wf || rx ? 40 : 100);
         if (r < 0 && errno != EINTR) break;
         if (r <= 0) continue;
         ssize_t got = io_recv(fd, in + have, sizeof in - have);
@@ -536,7 +533,7 @@ static int read_req(int fd, req_t *r) {
         if (n >= sizeof b - 1) return -1;
         struct pollfd p = {fd, POLLIN, 0};
         int left = (int)(dl - now_ms());
-        if (left <= 0 || (!io_ready() && poll(&p, 1, left) <= 0)) return -1;
+        if (left <= 0 || (!io_ready() && sock_poll(&p, 1, left) <= 0)) return -1;
         ssize_t got = io_recv(fd, b + n, sizeof b - 1 - n);
         if (got <= 0) return -1;
         n += (size_t)got;
@@ -562,7 +559,7 @@ static int read_req(int fd, req_t *r) {
     memcpy(r->body, body, c);
     while (c < want) {
         struct pollfd p = {fd, POLLIN, 0};
-        if (!io_ready() && poll(&p, 1, 2000) <= 0) break;
+        if (!io_ready() && sock_poll(&p, 1, 2000) <= 0) break;
         ssize_t got = io_recv(fd, r->body + c, want - c);
         if (got <= 0) break;
         c += (size_t)got;
@@ -576,13 +573,12 @@ static void *conn_main(void *p) {
     free(p);
 #ifdef HAVE_SSL
     if (c.tls) {
-        struct timeval tv = {5, 0};
-        setsockopt(c.fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+        sock_rcvtimeo(c.fd, 5000);
         cur_ssl = SSL_new(tls_ctx);
         if (!cur_ssl || !SSL_set_fd(cur_ssl, c.fd) || SSL_accept(cur_ssl) <= 0) {
             if (cur_ssl) SSL_free(cur_ssl);
             cur_ssl = NULL;
-            close(c.fd);
+            sock_close(c.fd);
             return NULL;
         }
     }
@@ -635,7 +631,7 @@ static void *conn_main(void *p) {
 #ifdef HAVE_SSL
     if (cur_ssl) { SSL_shutdown(cur_ssl); SSL_free(cur_ssl); cur_ssl = NULL; }
 #endif
-    close(c.fd);
+    sock_close(c.fd);
     return NULL;
 }
 
@@ -648,32 +644,31 @@ static void *accept_main(void *p) {
     while (!g_stop) {
         conn_t *c = calloc(1, sizeof *c);
         socklen_t sl = sizeof c->peer;
-        c->fd = accept4(ls, (struct sockaddr *)&c->peer, &sl, SOCK_CLOEXEC);
+        c->fd = sock_accept(ls, (struct sockaddr *)&c->peer, &sl);
         c->tls = l.tls;
         if (c->fd < 0) {
             free(c);
             if (errno == EINTR) continue;
             break;
         }
-        int one = 1;
-        setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
+        sock_nodelay(c->fd);
         pthread_t t;
-        if (pthread_create(&t, NULL, conn_main, c)) { close(c->fd); free(c); continue; }
+        if (pthread_create(&t, NULL, conn_main, c)) { sock_close(c->fd); free(c); continue; }
         pthread_detach(t);
     }
     return NULL;
 }
 
 static int open_listener(int port, int tls) {
-    int ls = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0), one = 1;
+    int ls = (int)socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     struct sockaddr_in sa = {0};
     sa.sin_family = AF_INET;
     sa.sin_port = htons((uint16_t)port);
     if (inet_pton(AF_INET, g_cfg.web_bind, &sa.sin_addr) != 1) sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+    sock_reuse(ls);
     if (bind(ls, (struct sockaddr *)&sa, sizeof sa) || listen(ls, 16)) {
         log_msg(TR("A %d-es port nem nyitható meg: %s", "Cannot open port %d: %s"), port, strerror(errno));
-        close(ls);
+        sock_close(ls);
         return -1;
     }
     lst_t *a = malloc(sizeof *a);
@@ -689,16 +684,10 @@ static int open_listener(int port, int tls) {
 /* Saját aláírású tanúsítvány a gép címeire; a böngésző egyszer rákérdez */
 static int make_cert(const char *crt, const char *key) {
     char san[900] = "subjectAltName=DNS:localhost,IP:127.0.0.1";
-    struct ifaddrs *ifa = NULL;
-    if (!getifaddrs(&ifa)) {
-        for (struct ifaddrs *i = ifa; i; i = i->ifa_next) {
-            char h[64];
-            if (!i->ifa_addr || i->ifa_addr->sa_family != AF_INET) continue;
-            getnameinfo(i->ifa_addr, sizeof(struct sockaddr_in), h, sizeof h, NULL, 0, NI_NUMERICHOST);
-            if (strncmp(h, "127.", 4) && strlen(san) + 32 < sizeof san) { strcat(san, ",IP:"); strcat(san, h); }
-        }
-        freeifaddrs(ifa);
-    }
+    char ip[16][64];
+    int nip = sys_local_ipv4(ip, 16);
+    for (int i = 0; i < nip; i++)
+        if (strlen(san) + 32 < sizeof san) { strcat(san, ",IP:"); strcat(san, ip[i]); }
     pid_t p = fork();
     if (p == 0) {
         int n = open("/dev/null", 1);
@@ -747,20 +736,15 @@ void web_start(void) {
 }
 
 void web_print_urls(void) {
-    struct ifaddrs *ifa = NULL;
     printf(TR("\nFT891 Next " APP_VERSION "\n  Ezen a gépen:  http://127.0.0.1:%d\n",
               "\nFT891 Next " APP_VERSION "\n  This computer:  http://127.0.0.1:%d\n"), g_cfg.web_port);
-    if (strcmp(g_cfg.web_bind, "127.0.0.1") && !getifaddrs(&ifa)) {
-        for (struct ifaddrs *i = ifa; i; i = i->ifa_next) {
-            if (!i->ifa_addr || i->ifa_addr->sa_family != AF_INET) continue;
-            char h[64];
-            getnameinfo(i->ifa_addr, sizeof(struct sockaddr_in), h, sizeof h, NULL, 0, NI_NUMERICHOST);
-            if (strncmp(h, "127.", 4)) {
-                printf(TR("  Telefonról:    http://%s:%d\n", "  From a phone:   http://%s:%d\n"), h, g_cfg.web_port);
-                if (g_cfg.tls_port) printf(TR("  Mikrofonnal:   https://%s:%d\n", "  With mic:       https://%s:%d\n"), h, g_cfg.tls_port);
-            }
+    if (strcmp(g_cfg.web_bind, "127.0.0.1")) {
+        char ip[16][64];
+        int nip = sys_local_ipv4(ip, 16);
+        for (int i = 0; i < nip; i++) {
+            printf(TR("  Telefonról:    http://%s:%d\n", "  From a phone:   http://%s:%d\n"), ip[i], g_cfg.web_port);
+            if (g_cfg.tls_port) printf(TR("  Mikrofonnal:   https://%s:%d\n", "  With mic:       https://%s:%d\n"), ip[i], g_cfg.tls_port);
         }
-        freeifaddrs(ifa);
         printf(TR("  PIN-kód:       %s\n", "  PIN:            %s\n"), g_cfg.pin);
     }
     printf("\n");

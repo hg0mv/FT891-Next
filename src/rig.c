@@ -1,17 +1,11 @@
 /* FT-891 CAT-mag: egyetlen szál kezeli a soros portot, minden kérés sorba áll */
 #include "ft891ctl.h"
 #include <ctype.h>
-#include <dirent.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
-#include <termios.h>
-#include <unistd.h>
 
 #define POST_WRITE_MS 50     /* a Hamlib FT-891-es értéke */
 #define REPLY_MS      400
@@ -24,11 +18,10 @@ static pthread_cond_t  C_done = PTHREAD_COND_INITIALIZER;
 static rig_state_t S;
 static job_t Q[64];
 static int   qn;
-static int   wake_p[2] = {-1, -1};
 static pthread_t cat_th;
 static int   clients;
 
-static int  fd = -1, ptt_fd = -1;
+static intptr_t fd = -1, ptt_fd = -1;
 static char rxbuf[1024];
 static int  rxn;
 static char last_reply[96];
@@ -44,7 +37,7 @@ static int guard, rekeys, test_active, test_seen, test_drop;
 #define UNLOCK() pthread_mutex_unlock(&M)
 #define SET(f, v) do { LOCK(); if (S.f != (v)) { S.f = (v); S.seq++; } UNLOCK(); } while (0)
 
-static void status(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void status(const char *fmt, ...) __attribute__((format(PRINTF_FMT, 1, 2)));
 static void status(const char *fmt, ...) {
     char b[160];
     va_list ap;
@@ -170,50 +163,23 @@ int rig_width_hz(const rig_state_t *s) {
     return f == 6 ? 12000 : 6000;
 }
 
-/* --- soros port --- */
-static speed_t baud_const(int b) {
-    switch (b) {
-    case 4800: return B4800;
-    case 9600: return B9600;
-    case 19200: return B19200;
-    default: return B38400;
-    }
-}
-
-static int open_port(const char *path, int baud, int rts) {
-    int f = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK);
-    if (f < 0) return -errno;
-    /* Nyitáskor a Linux felemelheti az RTS/DTR vonalat: azonnal levesszük */
-    int bits = TIOCM_RTS | TIOCM_DTR;
-    ioctl(f, TIOCMBIC, &bits);
-    if (ioctl(f, TIOCEXCL) < 0 && errno == EBUSY) { close(f); return -EBUSY; }
-    struct termios t;
-    if (tcgetattr(f, &t) == 0) {
-        cfmakeraw(&t);
-        t.c_cflag &= ~(unsigned)(CSIZE | PARENB | CRTSCTS | HUPCL);
-        t.c_cflag |= CS8 | CSTOPB | CLOCAL | CREAD;   /* 8N2 */
-        cfsetispeed(&t, baud_const(baud));
-        cfsetospeed(&t, baud_const(baud));
-        t.c_cc[VMIN] = 0;
-        t.c_cc[VTIME] = 0;
-        tcsetattr(f, TCSANOW, &t);
-    }
-    if (rts) { bits = TIOCM_RTS; ioctl(f, TIOCMBIS, &bits); }
-    return f;
+/* --- soros port (a rendszerfüggő rész a serial.c-ben) --- */
+static intptr_t open_port(const char *path, int baud, int rts, int *err) {
+    intptr_t h = -1;
+    *err = ser_open(path, baud, rts, &h);
+    return *err ? -1 : h;
 }
 
 static void hw_ptt(int on) {
     if (ptt_fd < 0) return;
-    int bits = g_cfg.ptt_method == 2 ? TIOCM_DTR : TIOCM_RTS;
-    if (ioctl(ptt_fd, on ? TIOCMBIS : TIOCMBIC, &bits) < 0)
-        log_msg(TR("A PTT-vonal nem állítható: %s", "Cannot set the PTT line: %s"), strerror(errno));
+    int e = ser_line(ptt_fd, g_cfg.ptt_method == 2 ? SER_DTR : SER_RTS, on);
+    if (e) log_msg(TR("A PTT-vonal nem állítható: %s", "Cannot set the PTT line: %s"), strerror(-e));
 }
 
 static void ptt_port_close(void) {
     if (ptt_fd >= 0) {
-        int bits = TIOCM_RTS | TIOCM_DTR;
-        ioctl(ptt_fd, TIOCMBIC, &bits);
-        close(ptt_fd);
+        ser_line(ptt_fd, SER_RTS | SER_DTR, 0);
+        ser_close(ptt_fd);
         ptt_fd = -1;
     }
     LOCK(); S.ptt_port[0] = 0; S.seq++; UNLOCK();
@@ -221,18 +187,7 @@ static void ptt_port_close(void) {
 
 static int find_ptt_path(char *out, size_t cap) {
     if (g_cfg.ptt_port[0]) { snprintf(out, cap, "%s", g_cfg.ptt_port); return 0; }
-    const char *p = strstr(S.port, "-if00");
-    if (p) {                      /* by-id: a Standard port az if01 */
-        snprintf(out, cap, "%.*s-if01%s", (int)(p - S.port), S.port, p + 5);
-        return 0;
-    }
-    const char *d = S.port + strlen(S.port);
-    while (d > S.port && isdigit((unsigned char)d[-1])) d--;
-    if (*d) {
-        snprintf(out, cap, "%.*s%d", (int)(d - S.port), S.port, atoi(d) + 1);
-        return 0;
-    }
-    return -1;
+    return ser_pair(S.port, out, cap);
 }
 
 static int ptt_port_open(void) {
@@ -240,9 +195,10 @@ static int ptt_port_open(void) {
     ptt_port_close();
     if (g_cfg.ptt_method == 0) return 0;
     if (find_ptt_path(path, sizeof path)) return -1;
-    int f = open_port(path, 9600, 0);
-    if (f < 0) {
-        rig_notice(1, TR("A PTT-port nem nyitható meg (%s): %s", "Cannot open the PTT port (%s): %s"), path, strerror(-f));
+    int err;
+    intptr_t f = open_port(path, 9600, 0, &err);
+    if (f == -1) {
+        rig_notice(1, TR("A PTT-port nem nyitható meg (%s): %s", "Cannot open the PTT port (%s): %s"), path, strerror(-err));
         return -1;
     }
     ptt_fd = f;
@@ -268,7 +224,7 @@ static int power_off_req;
 
 static void drop_link(const char *why) {
     if (fd >= 0) {
-        close(fd);
+        ser_close(fd);
         fd = -1;
     }
     hw_ptt(0);
@@ -284,17 +240,11 @@ static void handle_frame(const char *f);
 
 static int cat_write(const char *cmd) {
     if (fd < 0) return -1;
-    size_t n = strlen(cmd), o = 0;
+    size_t n = strlen(cmd);
     log_trace(">", cmd);
-    long long end = now_ms() + 300;
-    while (o < n) {
-        ssize_t w = write(fd, cmd + o, n - o);
-        if (w > 0) { o += (size_t)w; continue; }
-        if (w < 0 && errno != EAGAIN && errno != EINTR) { drop_link(strerror(errno)); return -1; }
-        struct pollfd p = {fd, POLLOUT, 0};
-        poll(&p, 1, 20);
-        if (now_ms() > end) { drop_link(TR("az írás nem fejeződött be", "write did not complete")); return -1; }
-    }
+    int e = ser_write(fd, cmd, n);
+    if (e == -ETIMEDOUT) { drop_link(TR("az írás nem fejeződött be", "write did not complete")); return -1; }
+    if (e) { drop_link(strerror(-e)); return -1; }
     return 0;
 }
 
@@ -316,20 +266,11 @@ static int read_frame(char *out, size_t cap, int timeout_ms, int use_wake) {
         if (fd < 0) return -1;
         long long left = end - now_ms();
         if (left <= 0) return 0;
-        struct pollfd p[2] = {{fd, POLLIN, 0}, {wake_p[0], POLLIN, 0}};
-        int r = poll(p, use_wake ? 2 : 1, (int)left);
-        if (r < 0) { if (errno == EINTR) continue; return -1; }
-        if (use_wake && (p[1].revents & POLLIN)) return 0;
-        if (p[0].revents & (POLLERR | POLLNVAL)) { drop_link(TR("a port eltűnt", "the port disappeared")); return -1; }
-        if (p[0].revents & (POLLIN | POLLHUP)) {
-            if (rxn >= (int)sizeof rxbuf - 1) rxn = 0;    /* szemét, eldobjuk */
-            ssize_t n = read(fd, rxbuf + rxn, sizeof rxbuf - 1 - (size_t)rxn);
-            if (n > 0) rxn += (int)n;
-            else if (n == 0 || (errno != EAGAIN && errno != EINTR)) {
-                drop_link(TR("a port eltűnt", "the port disappeared"));
-                return -1;
-            }
-        }
+        if (rxn >= (int)sizeof rxbuf - 1) rxn = 0;    /* szemét, eldobjuk */
+        int n = ser_read(fd, rxbuf + rxn, sizeof rxbuf - 1 - (size_t)rxn, (int)left, use_wake);
+        if (n < 0) { drop_link(TR("a port eltűnt", "the port disappeared")); return -1; }
+        if (n == 0) return 0;          /* lejárt az idő vagy ébresztés jött */
+        rxn += n;
     }
 }
 
@@ -484,59 +425,34 @@ static void handle_frame(const char *f) {
 
 /* --- csatlakozás --- */
 static int probe(const char *path, int baud, int rts) {
-    int f = open_port(path, baud, rts);
-    if (f < 0) return f;
-    tcflush(f, TCIOFLUSH);
+    int err;
+    intptr_t f = open_port(path, baud, rts, &err);
+    if (f == -1) return err;
+    ser_flush(f);
     fd = f;
     rxn = 0;
-    if (write(f, "ID;", 3) != 3) { close(f); fd = -1; return -EIO; }
+    if (ser_write(f, "ID;", 3)) { ser_close(f); fd = -1; return -EIO; }
     long long end = now_ms() + 300;
     char fr[96];
     while (fd >= 0 && now_ms() < end) {
         int r = read_frame(fr, sizeof fr, (int)(end - now_ms()), 0);
         if (r < 0) break;
-        if (r == 1 && !strcmp(fr, "ID0650;")) return f;
+        if (r == 1 && !strcmp(fr, "ID0650;")) return 1;
     }
-    if (fd >= 0) close(fd);
+    if (fd >= 0) ser_close(fd);
     fd = -1;
     return 0;
 }
 
-typedef struct { char path[256]; int trusted; } cand_t;
+typedef ser_cand_t cand_t;
 
 static int scan_candidates(cand_t *c, int max) {
-    int n = 0;
     if (g_cfg.cat_port[0]) {
         snprintf(c[0].path, sizeof c[0].path, "%.255s", g_cfg.cat_port);
         c[0].trusted = 1;
         return 1;
     }
-    DIR *d = opendir("/dev/serial/by-id");
-    if (d) {
-        struct dirent *e;
-        while ((e = readdir(d)) && n < max) {
-            if (!strstr(e->d_name, "CP2105") || !strstr(e->d_name, "-if00")) continue;
-            snprintf(c[n].path, sizeof c[n].path, "/dev/serial/by-id/%.200s", e->d_name);
-            c[n++].trusted = 1;
-        }
-        closedir(d);
-    }
-    if (n) return n;     /* a Standard portot így sosem nyitjuk meg véletlenül */
-    d = opendir("/dev");
-    if (d) {
-        struct dirent *e;
-        while ((e = readdir(d)) && n < max) {
-            if (strncmp(e->d_name, "ttyUSB", 6) && strncmp(e->d_name, "ttyACM", 6)) continue;
-            snprintf(c[n].path, sizeof c[n].path, "/dev/%.200s", e->d_name);
-            c[n++].trusted = 0;
-        }
-        closedir(d);
-        /* névsorrend: az Enhanced port az alacsonyabb sorszámú */
-        for (int i = 0; i < n; i++)
-            for (int j = i + 1; j < n; j++)
-                if (strcmp(c[i].path, c[j].path) > 0) { cand_t t = c[i]; c[i] = c[j]; c[j] = t; }
-    }
-    return n;
+    return ser_scan(c, max);
 }
 
 static int try_connect(void) {
@@ -837,13 +753,14 @@ static void power_on(void) {
     UNLOCK();
     if (n) { snprintf(path, sizeof path, "%.255s", c[0].path); rts = c[0].trusted; }
     if (!path[0]) { rig_notice(1, TR("Nem látom a rádió portját. Lehet, hogy kikapcsolva eltűnik, ilyenkor távolról nem kapcsolható be.", "The radio's port is not visible. It may disappear when the radio is off; then it cannot be switched on remotely.")); return; }
-    int f = open_port(path, baud, rts);
-    if (f < 0) { rig_notice(1, TR("A port nem nyitható meg: %s", "Cannot open the port: %s"), strerror(-f)); return; }
-    int ok = write(f, "PS1;", 4) == 4;
-    usleep(1200000);
-    ok = write(f, "PS1;", 4) == 4 && ok;
-    tcdrain(f);
-    close(f);
+    int err;
+    intptr_t f = open_port(path, baud, rts, &err);
+    if (f == -1) { rig_notice(1, TR("A port nem nyitható meg: %s", "Cannot open the port: %s"), strerror(-err)); return; }
+    int ok = ser_write(f, "PS1;", 4) == 0;
+    sleep_ms(1200);
+    ok = ser_write(f, "PS1;", 4) == 0 && ok;
+    ser_drain(f);
+    ser_close(f);
     if (ok) rig_notice(0, TR("Bekapcsolási parancs elküldve. Pár másodperc múlva kapcsolódnia kell.", "Power-on command sent. It should connect in a few seconds."));
     else rig_notice(1, TR("A bekapcsolási parancs nem ment ki.", "The power-on command was not sent."));
 }
@@ -938,8 +855,7 @@ static int run_job(const job_t *j) {
 }
 
 static void drain_wake(void) {
-    char b[32];
-    while (read(wake_p[0], b, sizeof b) > 0) {}
+    ser_wake_drain();
 }
 
 static void run_jobs(int fail_all) {
@@ -995,8 +911,7 @@ static void *cat_main(void *arg) {
             LOCK(); hold_mask = 0; UNLOCK();
             if (try_connect()) { after_connect(); next = 0; continue; }
             for (int i = 0; i < 20 && !g_stop; i++) {
-                struct pollfd p = {wake_p[0], POLLIN, 0};
-                poll(&p, 1, 100);
+                ser_wake_wait(100);
                 drain_wake();
                 run_jobs(1);
             }
@@ -1017,7 +932,7 @@ static void *cat_main(void *arg) {
         LOCK(); hold_mask = 0; UNLOCK();
         if (S.keyed) key_off();
         if (g_cfg.use_ai) cat_write("AI0;");
-        close(fd);
+        ser_close(fd);
         fd = -1;
     }
     run_jobs(1);
@@ -1057,12 +972,12 @@ void rig_job(const char *name, int i, int n) {
 void rig_start(void) {
     S.bfo_ssb = S.bfo_cw = S.bfo_data = S.bfo_rtty = -1;
     snprintf(S.status, sizeof S.status, "%s", TR("Indítás", "Starting"));
-    if (pipe2(wake_p, O_NONBLOCK | O_CLOEXEC)) { perror("pipe"); exit(1); }
+    ser_wake_init();
     pthread_create(&cat_th, NULL, cat_main, NULL);
 }
 
 static void wake(void) {
-    if (write(wake_p[1], "x", 1) < 0) { /* tele van: úgyis felébred */ }
+    ser_wake();
 }
 
 void rig_stop(void) {

@@ -75,6 +75,25 @@ Recommended radio menu settings:
 | 05-07 CAT TOT | 1000 ms | The default 10 ms can break CAT replies |
 | 05-08 CAT RTS | DISABLE | Both settings work when the port is recognised |
 
+## Windows (experimental)
+
+A Windows build is in progress. The first step covers rig control, the web interface, menus,
+memories and the rigctld-compatible port. Audio (waterfall, remote audio, microphone, SSTV)
+and HTTPS are not in the Windows build yet.
+
+Build it on Linux with MinGW:
+
+```bash
+sudo apt install mingw-w64
+make windows          # makes ft891ctl.exe
+```
+
+Copy `ft891ctl.exe` to the Windows computer and start it from a command window. Install the
+Silicon Labs CP210x driver first. The program finds the radio's "Enhanced COM Port"
+automatically, or use `--cat-port COM5`. Settings are stored in `%APPDATA%\ft891ctl`.
+Windows Firewall asks once whether the program may accept connections; allow it on private
+networks if you want to use a phone.
+
 ## Remote use
 
 On your home network open the printed address on your phone. From outside, use a **VPN**
@@ -143,7 +162,7 @@ computer while the radio is off; try it at home before relying on it remotely.
 ## Options
 
 ```text
---cat-port PATH   CAT port (default: automatic search)
+--cat-port PATH   CAT port, e.g. /dev/ttyUSB0 or COM5 (default: automatic search)
 --ptt-port PATH   RTS/DTR PTT port (default: the CAT port's pair)
 --web-port N      web port (8891)
 --web-bind ADDR   web address; 127.0.0.1 = this computer only
@@ -182,6 +201,8 @@ dropping CAT PTT, radio switched off). It does not replace tests on a real radio
 | `src/rigsrv.c` | rigctld-compatible server |
 | `src/web.c` | web server, WebSocket, PIN, HTTPS |
 | `src/menu.c`, `src/menus.def` | menu table, profiles, backups, memories |
+| `src/serial.c` | serial port for Linux and Windows |
+| `src/compat.c`, `src/net.h` | other Linux/Windows differences |
 | `src/audio.c` | waterfall and audio (arecord, aplay, FFT, mu-law) |
 | `src/sstv.c` | SSTV decoder |
 | `web/index.html` | the interface, built into the program |

@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "compat.h"
 
 #define APP_VERSION "0.6"
 #define RX_CHUNK 640    /* 80 ms hang: 8 kHz, mu-law */
@@ -48,7 +49,7 @@ void config_new_pin(void);
 #define LOG_SHOW  25   /* ennyi sor megy ki a felületre */
 void utf8_trim(char *s);
 void log_init(void);
-void log_msg(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void log_msg(const char *fmt, ...) __attribute__((format(PRINTF_FMT, 1, 2)));
 void log_trace(const char *dir, const char *frame);
 int  log_copy_json(char *out, size_t cap, unsigned *seq_out);
 unsigned log_seq(void);
@@ -127,7 +128,7 @@ void rig_set_tx_max(int seconds);
 void rig_cfg_get(int *ptt, int *lock, int *txm, char *dev, size_t cap);
 void rig_cfg_set_dev(const char *dev);
 void rig_client_count(int delta);
-void rig_notice(int bad, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void rig_notice(int bad, const char *fmt, ...) __attribute__((format(PRINTF_FMT, 2, 3)));
 
 /* a jelenlegi mód nevei */
 const char *rig_mode_name(const rig_state_t *s);    /* magyar felület: DATA-U */
@@ -151,7 +152,7 @@ void rig_bump(void);
 
 /* menük, profilok, memóriák */
 typedef struct { char *p; size_t n, cap; } sb_t;
-void sb_add(sb_t *b, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void sb_add(sb_t *b, const char *fmt, ...) __attribute__((format(PRINTF_FMT, 2, 3)));
 void menu_init(void);
 void menu_on_connect(void);
 void menu_cancel(void);
